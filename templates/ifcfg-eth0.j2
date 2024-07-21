@@ -1,0 +1,12 @@
+DEVICE="eth0"
+BOOTPROTO="none"
+IPADDR="{{ lbvip }}"
+PREFIX=24
+GATEWAY="{{ hostgw }}"
+DNS1="{{ hostns }}"
+ONBOOT="yes"
+TYPE="Ethernet"
+USERCTL="yes"
+PEERDNS="yes"
+IPV6INIT="no"
+PERSISTENT_DHCLIENT="1"

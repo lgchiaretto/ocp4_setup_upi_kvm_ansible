@@ -1,0 +1,29 @@
+clustername: kvm
+ocpversion: 4.16.1
+sno: 'true'
+kvmnetwork: default
+basedomain: chiaret.to
+worker_mem: '8192'
+worker_cpu: '4'
+n_worker: '2'
+master_mem: '32768'
+master_cpu: '8'
+hostgw: 192.168.1.1
+hostnw: 255.255.255.0
+hostns: 192.168.1.1
+lbvip: 192.168.1.49
+bootstrapip: 192.168.1.4
+master0ip: 192.168.1.5
+master1ip: 192.168.1.6
+master2ip: 192.168.1.7
+worker_ips:
+  - 192.168.1.20
+  - 192.168.1.21
+  - 192.168.1.22
+  - 192.168.1.23
+  - 192.168.1.24
+htpasswd_pass: "Redhat@123"
+ssh_rsa: >-
+  ssh-rsa ...
+pullsecret: >-
+  'pull-secret-json-content'

@@ -1,0 +1,87 @@
+global                                                                                    
+  log 127.0.0.1 local2   
+  chroot /var/lib/haproxy     
+  pidfile /var/run/haproxy.pid
+  maxconn 4000 
+  user haproxy               
+  group haproxy            
+  daemon                             
+  stats socket /var/lib/haproxy/stats                                 
+                                                                      
+defaults                                                
+  mode tcp                                              
+  log global                                            
+  option tcplog                                                       
+  option dontlognull                                                  
+  option redispatch            
+  option forwardfor 
+  retries 3                  
+  timeout queue 1m           
+  timeout connect 10s
+  timeout client 1m                                     
+  timeout server 1m                                      
+  timeout check 10s                                      
+  maxconn 3000                                                                            
+
+listen stats 
+    bind :80
+    mode http
+    stats enable
+    stats hide-version
+    stats refresh 30s
+    stats show-node
+    stats uri  /
+
+# 6443 points to control plan
+frontend {{  clustername }}-api 
+  bind {{ lbvip }}:6443
+  default_backend {{  clustername }}-master-api
+backend {{  clustername }}-master-api
+  balance source  
+  server bootstrap {{ bootstrapip }}:6443 check
+  server master-0 {{ master0ip }}:6443 check
+{%- if sno == "false" +%}  
+  server master-1 {{ master1ip }}:6443 check
+  server master-2 {{ master2ip }}:6443 check
+{%- endif +%}
+# 22623 points to control plane
+frontend {{  clustername }}-mapi 
+  bind {{ lbvip }}:22623
+  mode tcp
+  default_backend {{  clustername }}-master-mapi
+backend {{  clustername }}-master-mapi
+  balance source
+    server bootstrap {{ bootstrapip }}:22623 check
+    server master-0 {{ master0ip }}:22623 check
+{%- if sno == "false" +%}  
+  server master-1 {{ master1ip }}:22623 check
+  server master-2 {{ master2ip }}:22623 check
+{%- endif +%}
+# 80 points to master nodes
+frontend {{  clustername }}-http 
+  bind {{ lbvip }}:80
+  default_backend {{  clustername }}-ingress-http
+backend {{  clustername }}-ingress-http
+  balance source
+  server master-0 {{ master0ip }}:80 check
+{%- if sno == "false" +%}  
+  server master-1 {{ master1ip }}:80 check
+  server master-2 {{ master2ip }}:80 check
+{%- endif +%}
+
+# 443 points to master nodes
+frontend {{  clustername }}-https
+  bind {{ lbvip }}:443
+  default_backend {{  clustername }}-infra-https
+  option httplog
+  option http-server-close
+  option forwardfor
+  http-request add-header X-Forwarded-Proto http
+  http-request add-header X-Forwarded-Port 80
+backend {{  clustername }}-infra-https
+  balance source
+  server master-0 {{ master0ip }}:443 check
+{%- if sno == "false" +%}  
+  server master-1 {{ master1ip }}:443 check
+  server master-2 {{ master2ip }}:443 check
+{%- endif +%}
