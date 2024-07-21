@@ -201,7 +201,7 @@
     - name: Create LB disk
       ansible.builtin.copy:
         remote_src: true
-        src: "~/ocp-clusters/.cache/CentOS-7-x86_64-GenericCloud.qcow2"
+        src: "~/ocp-clusters/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/CentOS-7-x86_64-GenericCloud.qcow2"
         dest: "~/ocp-clusters/{{ clustername }}/{{ infraid.stdout }}-lb.qcow2"
 
     - name: Create ssh file
