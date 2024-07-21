@@ -67,6 +67,7 @@
           - libvirt
           - virt-install
           - virt-manager
+          - guestfs-tools
         state: present
       become: true
       become_method: ansible.builtin.sudo
