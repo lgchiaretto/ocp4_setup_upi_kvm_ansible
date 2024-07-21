@@ -211,6 +211,7 @@
 
     - name: Customize LB for OpenShift nodes
       ansible.builtin.command: virt-customize -a "{{ infraid.stdout }}-lb.qcow2" \
+                              --smp 4 \
                               --uninstall cloud-init --ssh-inject root:file:"/ocp-clusters/{{ clustername }}/id_rsa.pub" --selinux-relabel \
                               --run-command "sed -i s/mirror.centos.org/vault.centos.org/g /etc/yum.repos.d/*.repo" \
                               --run-command "sed -i s/^#.*baseurl=http/baseurl=http/g /etc/yum.repos.d/*.repo" \
