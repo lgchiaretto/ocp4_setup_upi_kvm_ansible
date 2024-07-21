@@ -8,6 +8,49 @@
     mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
 
   tasks:
+    - name: Configuring networkmanager to use dnsmasq
+      ansible.builtin.blockinfile:
+        path: "/etc/NetworkManager/conf.d/nm-dns.conf"
+        state: present
+        insertafter: EOF
+        content: |
+          [main]
+          dns=dnsmasq
+      register: configdnsmasq
+
+    - name: Adding /etc/hosts entries for cluster
+      ansible.builtin.blockinfile:
+        path: "/etc/hosts"
+        state: present
+        insertafter: EOF
+        content: |
+          {{ lbvip }} lb.{{ clustername }}.{{ basedomain }}
+          {{ lbvip }} api.{{ clustername }}.{{ basedomain }}
+          {{ lbvip }} api-int.{{ clustername }}.{{ basedomain }}
+
+    - name: Create cluster network conf on dnsmasq
+      ansible.builtin.template:
+        src: "cluster-network.conf.j2"
+        dest: "{{ dnsdir }}/{{ clustername }}.conf"
+        mode: '0644'
+        selevel: s0
+        serole: object_r
+        setype: dnsmasq_etc_t
+        seuser: system_u
+      register: dnsmasq
+
+    - name: Restart Network Manager when configuring dnsmasq
+      ansible.builtin.service:
+        name: NetworkManager
+        state: restarted
+      when: dnsmasq.changed
+
+    - name: Restart libvirt when configuring dnsmasq
+      ansible.builtin.service:
+        name: libvirtd
+        state: restarted
+      when: dnsmasq.changed
+
     - name: Create cluster directory directory
       ansible.builtin.file:
         path: "/ocp-clusters/{{ clustername }}"

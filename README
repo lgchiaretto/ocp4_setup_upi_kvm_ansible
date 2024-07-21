@@ -1,8 +1,16 @@
+This automation is used to create Openshift Single Node Clusters (SNO) or Openshift 3 node clusters in a KVM host running libvirt.
+
+Prereq:
+
+# Install ansible-core
+
 yum install -y ansible-core
 
 
+# Some collections are needed
+
 ansible-galaxy collection install -r requirements.yml
 
-
+# Run playbook
 
 ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm.yam
