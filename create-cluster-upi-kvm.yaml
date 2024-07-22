@@ -12,7 +12,6 @@
       ansible.builtin.blockinfile:
         path: "/etc/NetworkManager/conf.d/nm-dns.conf"
         state: present
-        insertafter: EOF
         content: |
           [main]
           dns=dnsmasq
