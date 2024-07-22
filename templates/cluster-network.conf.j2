@@ -1,7 +1,2 @@
 local=/{{ clustername }}.{{ basedomain }}/
-srv-host=_etcd-server-ssl._tcp.{{ clustername }}.{{ basedomain }},etcd-0.{{ clustername }}.{{ basedomain }},2380,0,10
-{%- if sno == "false" +%}  
-srv-host=_etcd-server-ssl._tcp.{{ clustername }}.{{ basedomain }},etcd-1.{{ clustername }}.{{ basedomain }},2380,0,10
-srv-host=_etcd-server-ssl._tcp.{{ clustername }}.{{ basedomain }},etcd-2.{{ clustername }}.{{ basedomain }},2380,0,10
-{%- endif +%}
 address=/apps.{{ clustername }}.{{ basedomain }}/{{ lbvip }}
