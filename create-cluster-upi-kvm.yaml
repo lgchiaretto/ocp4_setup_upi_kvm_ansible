@@ -293,8 +293,6 @@
         - "master-0"
         - "master-1"
         - "master-2"
-        - "worker-0"
-        - "worker-1"
       when: sno == "false"
 
     - name: Create virtual machines disks when SNO
@@ -312,7 +310,7 @@
         remote_src: true
         src: "/ocp-clusters/{{ clustername }}/rhcos-install/rhcos-qemu.x86_64.qcow2"
         dest: "/ocp-clusters/{{ clustername }}/{{ infraid.stdout }}-worker-{{ item }}.qcow2"
-      with_sequence: count={{ n_worker }}
+      with_sequence: count={{ n_worker }} start=0
       when: n_worker != 0
 
     - name: Define and start bootstrap
@@ -328,8 +326,6 @@
       args:
         chdir: "/ocp-clusters/{{ clustername }}"
       changed_when: bootstrapnodes.rc == 0
-      become: true
-      become_method: ansible.builtin.sudo
 
     - name: Define and start KVM masters on 3 node cluster
       ansible.builtin.command: virt-install --name {{ infraid.stdout }}-{{ item.name }} \
@@ -348,8 +344,6 @@
         - { name: master-0, ignition: master, ip: "{{ master0ip }}" }
         - { name: master-1, ignition: master, ip: "{{ master1ip }}" }
         - { name: master-2, ignition: master, ip: "{{ master2ip }}" }
-      become: true
-      become_method: sudo
       when: sno == "false"
 
     - name: Define and start KVM VMs when SNO
@@ -367,8 +361,6 @@
       changed_when: createnodes.rc == 0
       with_items:
         - { name: master-0, ignition: master, ip: "{{ master0ip }}" }
-      become: true
-      become_method: ansible.builtin.sudo
       when: sno == "true"
 
     - name: Define and start KVM Workers
@@ -384,8 +376,6 @@
       args:
         chdir: "/ocp-clusters/{{ clustername }}"
       changed_when: createworkers.rc == 0
-      become: true
-      become_method: ansible.builtin.sudo
       with_sequence: count={{ n_worker }}
       when: n_worker != 0
 
