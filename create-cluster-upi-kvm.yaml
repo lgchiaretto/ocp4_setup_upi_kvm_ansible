@@ -396,6 +396,28 @@
       ansible.builtin.pause:
         minutes: 20
 
+    - name: Run wait-for bootstrap-complete
+      ansible.builtin.command: "./openshift-install wait-for bootstrap-complete"
+      args:
+        chdir: "/ocp-clusters/{{ clustername }}"
+      async: 3600
+      poll: 0
+      register: waitbootstrap
+      changed_when: true
+
+    - name: Check if bootstrap vm can be removed
+      ansible.builtin.async_status:
+        jid: "{{ waitbootstrap.ansible_job_id }}"
+      register: job_result
+      until: job_result.finished
+      delay: 10
+      retries: 600
+
+    - name: Remove bootstrap VM
+      community.libvirt.virt:
+        name: "{{ infraid.stdout }}-lb"
+        state: destroyed
+
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"
       args:
@@ -419,13 +441,6 @@
         state: present
         template: "scheduler.yaml.j2"
       when: sno != "true"
-
-# FIX ME
-#    - name: Remove bootstrap VM
-#      community.libvirt.virt:
-#        name: bootstrap
-#        state: destroyed
-#      when: clustertype == "upi" and infra == "kvm"
 
     - name: Pause cronjob ocp-csr-approver
       kubernetes.core.k8s:
