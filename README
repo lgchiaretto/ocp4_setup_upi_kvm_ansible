@@ -4,7 +4,7 @@ Prereq:
 
 # Install ansible-core
 
-yum install -y ansible-core
+sudo dnf install -y ansible-core
 
 
 # Some collections are needed
