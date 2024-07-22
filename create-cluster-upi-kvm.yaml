@@ -17,15 +17,15 @@
           dns=dnsmasq
       register: configdnsmasq
 
-    - name: Adding /etc/hosts entries for cluster
-      ansible.builtin.blockinfile:
-        path: "/etc/hosts"
-        state: present
-        insertafter: EOF
-        content: |
-          {{ lbvip }} lb.{{ clustername }}.{{ basedomain }}
-          {{ lbvip }} api.{{ clustername }}.{{ basedomain }}
-          {{ lbvip }} api-int.{{ clustername }}.{{ basedomain }}
+#    - name: Adding /etc/hosts entries for cluster
+#      ansible.builtin.blockinfile:
+#        path: "/etc/hosts"
+#        state: present
+#        insertafter: EOF
+#        content: |
+#          {{ lbvip }} lb.{{ clustername }}.{{ basedomain }}
+#          {{ lbvip }} api.{{ clustername }}.{{ basedomain }}
+#          {{ lbvip }} api-int.{{ clustername }}.{{ basedomain }}
 
     - name: Create cluster network conf on dnsmasq
       ansible.builtin.template:
@@ -282,8 +282,6 @@
       args:
         chdir: "/ocp-clusters/{{ clustername }}"
       changed_when: definelb.rc == 0
-      become: true
-      become_method: ansible.builtin.sudo
 
     - name: Create virtual machines disks when 3 node cluster
       ansible.builtin.copy:
