@@ -13,4 +13,4 @@ ansible-galaxy collection install -r requirements.yml
 
 # Run playbook
 
-ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm.yam
+ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm.yaml
