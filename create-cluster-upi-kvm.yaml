@@ -43,6 +43,7 @@
     - name: Sleeping 3 seconds to wait NetworkManager
       ansible.builtin.pause:
         seconds: 3
+      when: dnsmasq.changed
 
     - name: Create cluster directory directory
       ansible.builtin.file:
