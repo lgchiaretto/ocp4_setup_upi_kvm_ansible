@@ -9,7 +9,7 @@
 
   tasks:
     - name: Configuring networkmanager to use dnsmasq
-      ansible.builtin.blockinfile:
+      ansible.builtin.copy:
         path: "/etc/NetworkManager/conf.d/nm-dns.conf"
         state: present
         content: |
@@ -311,7 +311,7 @@
     - name: Define bootstrap
       ansible.builtin.command: virt-install --name {{ clustername }}-bootstrap \
             --disk /ocp-clusters/{{ clustername }}/bootstrap.qcow2,bus=virtio,size=120 \
-            --ram "16000" --cpu host --vcpus "8" --os-variant rhel9.0 --pxe --network network={{ kvmnetwork }},model=virtio \
+            --ram "16000" --cpu host --vcpus "8" --os-variant rhel7-unknown --pxe --network network={{ kvmnetwork }},model=virtio \
             --location rhcos-install/ --noautoconsole \
             --extra-args 'nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=vda \
             coreos.live.rootfs_url=http://{{ lbvip }}:1234/rhcos-live-rootfs.x86_64.img \
@@ -325,7 +325,7 @@
     - name: Define KVM masters on 3 node cluster
       ansible.builtin.command: virt-install --name {{ clustername }}-{{ item.name }} \
             --disk /ocp-clusters/{{ clustername }}/{{ item.name }}.qcow2,bus=virtio,size=120 \
-            --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9.0 --pxe --network network={{ kvmnetwork }},model=virtio \
+            --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel7-unknown --pxe --network network={{ kvmnetwork }},model=virtio \
             --location rhcos-install/ --noautoconsole \
             --extra-args 'nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=vda \
             coreos.live.rootfs_url=http://{{ lbvip }}:1234/rhcos-live-rootfs.x86_64.img \
@@ -344,7 +344,7 @@
     - name: Define KVM VMs when SNO
       ansible.builtin.command: virt-install --name {{ clustername }}-{{ item.name }}   \
             --disk /ocp-clusters/{{ clustername }}/{{ item.name }}.qcow2,bus=virtio,size=120 \
-            --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9.0 --pxe --network network={{ kvmnetwork }},model=virtio \
+            --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel7-unknown --pxe --network network={{ kvmnetwork }},model=virtio \
             --location rhcos-install/ --noautoconsole \
             --extra-args 'nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=vda \
             coreos.live.rootfs_url=http://{{ lbvip }}:1234/rhcos-live-rootfs.x86_64.img \
@@ -361,7 +361,7 @@
     - name: Define KVM Workers
       ansible.builtin.command: virt-install --name {{ clustername }}-worker-{{ item }} \
                --disk /ocp-clusters/{{ clustername }}/worker-{{ item }}.qcow2,bus=virtio,size=120 \
-               --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9.0 --pxe --network network={{ kvmnetwork }},model=virtio \
+               --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel7-unknown --pxe --network network={{ kvmnetwork }},model=virtio \
                --location rhcos-install/ --noautoconsole \
                --extra-args 'nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=vda \
                coreos.live.rootfs_url=http://{{ lbvip }}:1234/rhcos-live-rootfs.x86_64.img \
