@@ -8,10 +8,25 @@
     mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
 
   tasks:
+    - name: Ensure necessary packages are installed
+      ansible.builtin.yum:
+        name:
+          - qemu-kvm
+          - libvirt
+          - virt-install
+          - virt-manager
+          - guestfs-tools
+        state: present
+
+    - name: Ensure libvirtd service is running
+      ansible.builtin.service:
+        name: libvirtd
+        state: started
+        enabled: true
+
     - name: Configuring networkmanager to use dnsmasq
       ansible.builtin.copy:
-        path: "/etc/NetworkManager/conf.d/nm-dns.conf"
-        state: present
+        dest: "/etc/NetworkManager/conf.d/nm-dns.conf"
         content: |
           [main]
           dns=dnsmasq
@@ -98,22 +113,6 @@
         - csr-approver-crb
         - csr-approver-rb
         - csr-approver-cronjob
-
-    - name: Ensure necessary packages are installed
-      ansible.builtin.yum:
-        name:
-          - qemu-kvm
-          - libvirt
-          - virt-install
-          - virt-manager
-          - guestfs-tools
-        state: present
-
-    - name: Ensure libvirtd service is running
-      ansible.builtin.service:
-        name: libvirtd
-        state: started
-        enabled: true
 
     - name: Run create ignition files
       ansible.builtin.command: "./openshift-install create ignition-configs"
