@@ -43,7 +43,7 @@
         seuser: system_u
       register: dnsmasq
 
-    - name: Create cluster network conf on dnsmasq
+    - name: Create addnhosts file
       ansible.builtin.template:
         src: "dnsmasq.openshift.addnhosts.j2"
         dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
