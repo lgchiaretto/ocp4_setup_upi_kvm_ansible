@@ -19,6 +19,8 @@ metadata:
   name: "{{ clustername }}"
 networking:
   networkType: OVNKubernetes
+  machineNetwork:
+  - cidr: {{ machinenetwork }}
   clusterNetwork:
   - cidr: 10.128.0.0/14
     hostPrefix: 23
