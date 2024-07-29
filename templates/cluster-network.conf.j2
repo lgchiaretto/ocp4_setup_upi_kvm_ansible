@@ -1,14 +1,4 @@
 local=/{{ clustername }}.{{ basedomain }}/
 srv-host=_etcd-server-ssl._tcp.{{ clustername }}.{{ basedomain }},etcd-0.{{ clustername }}.{{ basedomain }},2380,0,10
-address=/etcd-0.{{ clustername }}.{{ basedomain }}/{{ lbvip }}
-address=/api.{{ clustername }}.{{ basedomain }}/{{ lbvip }}
-address=/lb.{{ clustername }}.{{ basedomain }}/{{ lbvip }}
-address=/api-int.{{ clustername }}.{{ basedomain }}/{{ lbvip }}
-address=/apps.{{ clustername }}.{{ basedomain }}/{{ lbvip }}
-address=/bootstrap.{{ clustername }}.{{ basedomain }}/{{ bootstrapip }}
-address=/master-0.{{ clustername }}.{{ basedomain }}/{{ master0ip }}
-{%- if sno == "false" +%}
-address=/master-1.{{ clustername }}.{{ basedomain }}/{{ master1ip }}
-address=/master-2.{{ clustername }}.{{ basedomain }}/{{ master2ip }}
-{%- endif +%}
-
+no-hosts
+addn-hosts=/etc/dnsmasq.{{ clustername }}.addnhosts

@@ -43,6 +43,17 @@
         seuser: system_u
       register: dnsmasq
 
+    - name: Create cluster network conf on dnsmasq
+      ansible.builtin.template:
+        src: "dnsmasq.openshift.addnhosts.j2"
+        dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+        mode: '0644'
+        selevel: s0
+        serole: object_r
+        setype: dnsmasq_etc_t
+        seuser: system_u
+      register: dnsmasq
+
     - name: Restart Network Manager when configuring dnsmasq
       ansible.builtin.service:
         name: NetworkManager
