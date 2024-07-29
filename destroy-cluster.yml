@@ -1,0 +1,30 @@
+- name: Destroy clusters UPI on KVM
+  hosts: localhost
+  gather_facts: false
+  become: true
+  become_method: sudo
+
+  tasks:
+  - name: Wait for LB to get an IP address
+    community.libvirt.virt:
+      command: list_vms
+    register: allvms
+
+  - name: Getting only clustername vms
+    set_fact:
+      vms2destroy: "{{ allvms.list_vms | select('search', 'local01' ) }}"
+
+  - name: Delete all network files
+    ansible.builtin.file:
+      path: "{{ item }}"
+      state: absent
+    with_items:
+      - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
+      - "/etc/dnsmasq.{{ clustername }}.addnhosts"
+      - "/ocp-clusters/{{ clustername }}/"
+
+  - name: Destroy all vms
+    community.libvirt.virt:
+      command: destroy
+      name: "{{ item }}"
+    with_items: "{{ vms2destroy }}"
