@@ -34,44 +34,44 @@ listen stats
 
 # 6443 points to control plan
 frontend {{  clustername }}-api 
-  bind {{ lbvip }}:6443
+  bind lb.{{ clustername }}.{{ basedomain }}:6443
   default_backend {{  clustername }}-master-api
 backend {{  clustername }}-master-api
   balance source  
-  server bootstrap {{ bootstrapip }}:6443 check
-  server master-0 {{ master0ip }}:6443 check
+  server bootstrap bootstrap.{{ clustername }}.{{ basedomain }}:6443 check
+  server master-0 master-0.{{ clustername }}.{{ basedomain }}:6443 check
 {%- if sno == "false" +%}  
-  server master-1 {{ master1ip }}:6443 check
-  server master-2 {{ master2ip }}:6443 check
+  server master-1 master-1.{{ clustername }}.{{ basedomain }}:6443 check
+  server master-2 master-2.{{ clustername }}.{{ basedomain }}:6443 check
 {%- endif +%}
 # 22623 points to control plane
 frontend {{  clustername }}-mapi 
-  bind {{ lbvip }}:22623
+  bind lb.{{ clustername }}.{{ basedomain }}:22623
   mode tcp
   default_backend {{  clustername }}-master-mapi
 backend {{  clustername }}-master-mapi
   balance source
-    server bootstrap {{ bootstrapip }}:22623 check
-    server master-0 {{ master0ip }}:22623 check
+    server bootstrap bootstrap.{{ clustername }}.{{ basedomain }}:22623 check
+    server master-0 master-0.{{ clustername }}.{{ basedomain }}:22623 check
 {%- if sno == "false" +%}  
-  server master-1 {{ master1ip }}:22623 check
-  server master-2 {{ master2ip }}:22623 check
+  server master-1 master-1.{{ clustername }}.{{ basedomain }}:22623 check
+  server master-2 master-2.{{ clustername }}.{{ basedomain }}:22623 check
 {%- endif +%}
 # 80 points to master nodes
 frontend {{  clustername }}-http 
-  bind {{ lbvip }}:80
+  bind lb.{{ clustername }}.{{ basedomain }}:80
   default_backend {{  clustername }}-ingress-http
 backend {{  clustername }}-ingress-http
   balance source
-  server master-0 {{ master0ip }}:80 check
+  server master-0 master-0.{{ clustername }}.{{ basedomain }}:80 check
 {%- if sno == "false" +%}  
-  server master-1 {{ master1ip }}:80 check
-  server master-2 {{ master2ip }}:80 check
+  server master-1 master-1.{{ clustername }}.{{ basedomain }}:80 check
+  server master-2 master-2.{{ clustername }}.{{ basedomain }}:80 check
 {%- endif +%}
 
 # 443 points to master nodes
 frontend {{  clustername }}-https
-  bind {{ lbvip }}:443
+  bind lb.{{ clustername }}.{{ basedomain }}:443
   default_backend {{  clustername }}-infra-https
   option httplog
   option http-server-close
@@ -80,8 +80,8 @@ frontend {{  clustername }}-https
   http-request add-header X-Forwarded-Port 80
 backend {{  clustername }}-infra-https
   balance source
-  server master-0 {{ master0ip }}:443 check
+  server master-0 master-0.{{ clustername }}.{{ basedomain }}:443 check
 {%- if sno == "false" +%}  
-  server master-1 {{ master1ip }}:443 check
-  server master-2 {{ master2ip }}:443 check
+  server master-1 master-1.{{ clustername }}.{{ basedomain }}:443 check
+  server master-2 master-2.{{ clustername }}.{{ basedomain }}:443 check
 {%- endif +%}
