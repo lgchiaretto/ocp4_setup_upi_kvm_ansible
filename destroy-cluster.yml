@@ -28,3 +28,9 @@
       command: destroy
       name: "{{ item }}"
     with_items: "{{ vms2destroy }}"
+
+  - name: Destroy all vms
+    community.libvirt.virt:
+      command: undefine
+      name: "{{ item }}"
+    with_items: "{{ vms2destroy }}"

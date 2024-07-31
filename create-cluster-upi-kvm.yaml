@@ -235,11 +235,11 @@
         dest: /ocp-clusters/{{ clustername }}/haproxy.cfg
         mode: '0644'
 
-    - name: Create LB disk
-      ansible.builtin.copy:
-        remote_src: true
-        src: "/ocp-clusters/.cache/Fedora-Cloud-Base-Generic.x86_64-40-1.14.qcow2"
-        dest: "/ocp-clusters/{{ clustername }}/lb.qcow2"
+#    - name: Create LB disk
+#      ansible.builtin.copy:
+#        remote_src: true
+#        src: "/ocp-clusters/.cache/Fedora-Cloud-Base-Generic.x86_64-40-1.14.qcow2"
+#        dest: "/ocp-clusters/{{ clustername }}/lb.qcow2"
 
     - name: Create ssh file
       ansible.builtin.copy:
@@ -247,21 +247,49 @@
         content: "{{ ssh_rsa }}"
         dest: "/ocp-clusters/{{ clustername }}/id_rsa.pub"
 
+#    - name: Customize LB for OpenShift nodes
+#      ansible.builtin.command: virt-customize -a "lb.qcow2" \
+#                              --smp 4 \
+#                              --uninstall cloud-init --ssh-inject root:file:"/ocp-clusters/{{ clustername }}/id_rsa.pub" --selinux-relabel \
+#                              --install haproxy --install bind-utils \
+#                              --copy-in bootstrap.ign:/opt/ --copy-in master.ign:/opt/ --copy-in worker.ign:/opt/ \
+#                              --copy-in rhcos-install/vmlinuz:/opt/ \
+#                              --copy-in rhcos-install/rhcos-live-rootfs.x86_64.img:/opt/ \
+#                              --copy-in ifcfg-eth0:/etc/sysconfig/network-scripts/ \
+#                              --copy-in tmpws.service:/etc/systemd/system/ \
+#                              --copy-in haproxy.cfg:/etc/haproxy/ \
+#                              --edit /etc/selinux/config:'s/^SELINUX=.*/SELINUX=disabled/g' \
+#                              --run-command "systemctl daemon-reload" \
+#                              --run-command "systemctl enable tmpws.service" \
+#                              --run-command "systemctl enable haproxy"
+#
+#      register: customizelb
+#      args:
+#        chdir: "/ocp-clusters/{{ clustername }}"
+#      changed_when: customizelb.rc == 0
+
     - name: Customize LB for OpenShift nodes
-      ansible.builtin.command: virt-customize -a "lb.qcow2" \
-                              --smp 4 \
-                              --uninstall cloud-init --ssh-inject root:file:"/ocp-clusters/{{ clustername }}/id_rsa.pub" --selinux-relabel \
-                              --install haproxy --install bind-utils \
-                              --copy-in bootstrap.ign:/opt/ --copy-in master.ign:/opt/ --copy-in worker.ign:/opt/ \
-                              --copy-in rhcos-install/vmlinuz:/opt/ \
-                              --copy-in rhcos-install/rhcos-live-rootfs.x86_64.img:/opt/ \
-                              --copy-in ifcfg-eth0:/etc/sysconfig/network-scripts/ \
-                              --copy-in tmpws.service:/etc/systemd/system/ \
-                              --copy-in haproxy.cfg:/etc/haproxy/ \
-                              --edit /etc/selinux/config:'s/^SELINUX=.*/SELINUX=disabled/g' \
-                              --run-command "systemctl daemon-reload" \
-                              --run-command "systemctl enable tmpws.service" \
-                              --run-command "systemctl enable haproxy"
+      ansible.builtin.command: virt-builder fedora-40 --format qcow2 --cache /ocp-clusters/.cache/ --size 10G -o "lb.qcow2" \
+                               --firstboot-command "nmcli con mod 'Wired connection 1' connection.id enp1s0" \
+                               --firstboot-command "nmcli con mod enp1s0 ipv4.method manual ipv4.addresses '{{ lbvip }}/24' ipv4.gateway '{{ hostgw }}' ipv4.dns '{{ hostns }}'" \
+                               --firstboot-command "sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config" \
+                               --firstboot-command "systemctl disable firewalld" \
+                               --firstboot-command "setenforce 0" \
+                               --firstboot-command "reboot" \
+                               --ssh-inject root:file:/home/lchiaret/.ssh/id_rsa.pub --selinux-relabel \
+                               --copy-in bootstrap.ign:/opt/ --copy-in master.ign:/opt/ --copy-in worker.ign:/opt/ \
+                               --copy-in tmpws.service:/etc/systemd/system/ \
+                               --hostname "lb-{{ clustername }}.{{ basedomain }}" \
+                               --install haproxy \
+                               --copy-in rhcos-install/rhcos-live-rootfs.x86_64.img:/opt/ \
+                               --copy-in rhcos-install/initramfs.img:/opt/ \
+                               --copy-in rhcos-install/vmlinuz:/opt/ \
+                               --copy-in rhcos-install/.treeinfo:/opt/ \
+                               --run-command "systemctl daemon-reload" \
+                               --copy-in haproxy.cfg:/etc/haproxy/
+                               --run-command "systemctl enable tmpws.service" \
+                               --run-command "systemctl enable haproxy.service" \
+                               --root-password password:"{{ htpasswd_pass }}"
 
       register: customizelb
       args:
@@ -276,6 +304,14 @@
       args:
         chdir: "/ocp-clusters/{{ clustername }}"
       changed_when: definelb.rc == 0
+
+    - name: Wait for LB to get an IP address
+      ansible.builtin.command:
+        command: 'virsh domifaddr {{ clustername }}-lb | awk "/ipv4/ { print \$4 }" | cut -d"/" -f1'
+      register: lb_info
+      until: lb_info is defined and lb_info != ""
+      retries: "180"
+      delay: "1"
 
     - name: Create virtual machines disks when 3 node cluster
       ansible.builtin.copy:
