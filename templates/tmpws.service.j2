@@ -3,6 +3,6 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/opt
-ExecStart=/usr/bin/python -m SimpleHTTPServer 1234
+ExecStart=/usr/bin/python3 -m http.server 1234
 [Install]
 WantedBy=default.target

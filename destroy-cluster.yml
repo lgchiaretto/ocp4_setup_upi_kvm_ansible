@@ -14,6 +14,13 @@
     set_fact:
       vms2destroy: "{{ allvms.list_vms | select('search', 'local01' ) }}"
 
+  - name: Remove all vms
+    community.libvirt.virt:
+      command: undefine
+      force: true
+      name: "{{ item }}"
+    with_items: "{{ vms2destroy }}"
+
   - name: Delete all network files
     ansible.builtin.file:
       path: "{{ item }}"
@@ -22,15 +29,3 @@
       - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
       - "/etc/dnsmasq.{{ clustername }}.addnhosts"
       - "/ocp-clusters/{{ clustername }}/"
-
-  - name: Destroy all vms
-    community.libvirt.virt:
-      command: destroy
-      name: "{{ item }}"
-    with_items: "{{ vms2destroy }}"
-
-  - name: Destroy all vms
-    community.libvirt.virt:
-      command: undefine
-      name: "{{ item }}"
-    with_items: "{{ vms2destroy }}"
