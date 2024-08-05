@@ -1,14 +1,15 @@
-clustername: teste003
-basedomain: chiaret.to
+clustername: ocp01
+basedomain: lab.local
 ocpversion: 4.16.1
+clusters_dir: "/ocp-clusters" #not use / at end
 sno: 'true'
 kvmnetwork: default
 dnsdir: "/etc/NetworkManager/dnsmasq.d"
 worker_mem: '8192'
 worker_cpu: '4'
 n_worker: '0'
-master_mem: '14000'
-master_cpu: '6'
+master_mem: '16000'
+master_cpu: '8'
 hostgw: 192.168.122.1
 hostnw: 255.255.255.0
 hostns: 192.168.122.1
@@ -25,6 +26,6 @@ worker_ips:
   - 192.168.122.24
 htpasswd_pass: "Redhat@123"
 ssh_rsa: >-
-  ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdrq8QOVo8CzPrgKPC4MXN+Vn6dWdZksAWQVUrC6jvcjuFKQgb8EiMAxS0djFJKbk14SL6BRuUwBopjkumxD6kS38VDvGNlEIcWG2sQKnAzEtGdzG4N72qu6ObNK+ralg8Gu5uZPhziyKFXpwg9kOBl1qxOiycR4acyaDt4SxSAD7BWJPEbiYUeCrcZQ+BMrVUwLPpLYBa+h0/uJmK4+U632MfYUMiudNXLcs3e3f/yi5GMli6BcGgl7wlEbgnUZQzrW0D04jNWk0/JGU506c166b6Dy6bigefUlLvjJ4I/8vZns3ZRj3YV6oPaZMY9BZ9FrB0jE+7XgVXlMY7lyXX
+  '...'
 pullsecret: >-
   '...'
