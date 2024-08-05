@@ -1,5 +1,5 @@
 clustername: ocp01
-basedomain: lab.local
+basedomain: cluster.lab
 ocpversion: 4.16.1
 clusters_dir: "/ocp-clusters" #not use / at end
 sno: 'true'
