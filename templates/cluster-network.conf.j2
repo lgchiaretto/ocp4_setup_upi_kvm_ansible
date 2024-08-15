@@ -1,4 +1,5 @@
 local=/{{ clustername }}.{{ basedomain }}/
 srv-host=_etcd-server-ssl._tcp.{{ clustername }}.{{ basedomain }},etcd-0.{{ clustername }}.{{ basedomain }},2380,0,10
 no-hosts
+address=/apps.{{ clustername }}.{{ basedomain }}/{{ lbvip }}
 addn-hosts=/etc/dnsmasq.{{ clustername }}.addnhosts
