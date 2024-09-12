@@ -23,7 +23,7 @@ spec:
         spec:
           containers:
             - name: approver
-              image: "registry.redhat.io/openshift4/ose-cli:v{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}"
+              image: "registry.redhat.io/openshift4/ose-cli:v4.14"
               securityContext:
                 privileged: true
               command:
