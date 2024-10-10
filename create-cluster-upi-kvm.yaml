@@ -50,6 +50,24 @@
         mode: '0644'
       register: addnhosts
 
+    - name: Create the OCP version cache directory if it does not exist
+      ansible.builtin.file:
+        path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/"
+        state: directory
+        mode: '0755'
+
+    - name: Check if the installer file already exists on cache
+      ansible.builtin.stat:
+        path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+      register: installfile
+
+    - name: Download installer openshift-install-linux.tar.gz to cache
+      ansible.builtin.get_url:
+        url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ ocpversion }}/openshift-install-linux.tar.gz"
+        dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+        mode: '0644'
+      when: installfile.stat is defined and not installfile.stat.exists
+
     - name: Restart Network Manager when configuring dnsmasq
       ansible.builtin.service:
         name: NetworkManager
@@ -62,10 +80,10 @@
         state: restarted
       when: dnsmasq.changed
 
-    - name: Sleeping 3 seconds to wait NetworkManager
-      ansible.builtin.pause:
-        seconds: 3
-      when: dnsmasq.changed
+    # - name: Sleeping 3 seconds to wait NetworkManager
+    #   ansible.builtin.pause:
+    #     seconds: 3
+    #   when: dnsmasq.changed
 
     - name: Create cluster directory
       ansible.builtin.file:
@@ -73,16 +91,16 @@
         state: "directory"
         mode: "0755"
 
-    - name: Download installer openshift-install-linux.tar.gz
-      ansible.builtin.get_url:
-        url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ ocpversion }}/openshift-install-linux.tar.gz"
-        dest: "{{ clusters_dir }}/{{ clustername }}/openshift-install-linux.tar.gz"
-        mode: '0644'
+    - name: Copy openshift-install.tar.gz to cluster dir
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+        dest: "{{ clusters_dir }}/{{ clustername }}/"
 
     - name: Untar on openshift-install-linux.tar.gz file
       ansible.builtin.unarchive:
         remote_src: true
-        src: "{{ clusters_dir }}/{{ clustername }}/openshift-install-linux.tar.gz"
+        src: "{{ clusters_dir }}/{{ clustername }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
         dest: "{{ clusters_dir }}/{{ clustername }}"
 
     - name: Copy install-config.yaml
@@ -122,12 +140,6 @@
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       register: install
       changed_when: true
-
-    - name: Create the OCP version cache directory if it does not exist
-      ansible.builtin.file:
-        path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/"
-        state: directory
-        mode: '0755'
 
     - name: Check if the RHCOS file already exists on cache
       ansible.builtin.stat:
