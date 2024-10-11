@@ -10,14 +10,19 @@
         command: list_vms
       register: allvms
 
+    - name: Wait for master to get mac address
+      ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-0 | grep 'mac address' | grep 'mac address' | sed 's/.*mac address='\\''\\([^'\\'']*\\)'\\''.*/\\1/'"
+      register: master_info
+      until: master_info is defined and master_info.stdout != ""
+
     # TODO: FIX it
-    - name: Remove all vms
-      community.libvirt.virt:
-        command: undefine
-        force: true
-        name: "{{ item }}"
-      loop: "{{ allvms.list_vms }}"
-      when: item is search("{{ clustername }}")
+    # - name: Remove all vms
+    #   community.libvirt.virt:
+    #     command: undefine
+    #     force: true
+    #     name: "{{ item }}"
+    #   loop: "{{ allvms.list_vms }}"
+    #   when: item is search("{{ clustername }}")
 
     - name: Delete all network files
       ansible.builtin.file:
@@ -27,3 +32,10 @@
         - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
         - "/etc/dnsmasq.{{ clustername }}.addnhosts"
         - "/{{ clusters_dir }}/{{ clustername }}/"
+
+    - name: Deleting master mac on DHCP
+      community.libvirt.virt_net:
+        name: ocp
+        command: modify
+        xml: "<host mac='{{ master_info.stdout }}' name='{{ clustername }}-master-0.chiaret.to' ip='{{ master0ip }}'/>"
+      register: master_info

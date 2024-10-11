@@ -1,9 +1,4 @@
-{{ bootstrapip }} bootstrap.{{ clustername }}.{{ basedomain }}
 {{ master0ip }} master-0.{{ clustername }}.{{ basedomain }}
-{{ lbvip }} lb.{{ clustername }}.{{ basedomain }}
-{{ lbvip }} api.{{ clustername }}.{{ basedomain }}
-{{ lbvip }} api-int.{{ clustername }}.{{ basedomain }}
-{%- if sno == "false" +%}
-{{ master1ip }} master-1.{{ clustername }}.{{ basedomain }}
-{{ master2ip }} master-2.{{ clustername }}.{{ basedomain }}
-{%- endif +%}
+{{ master0ip }} api.{{ clustername }}.{{ basedomain }}
+{{ master0ip }} api-int.{{ clustername }}.{{ basedomain }}
+
