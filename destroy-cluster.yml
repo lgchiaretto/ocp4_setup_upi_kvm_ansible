@@ -14,9 +14,17 @@
       ansible.builtin.set_fact:
         allvms: "{{ vms.stdout_lines | select('search', clustername) }}"
 
-    - name: Remove all vms
+    - name: Destroy all vms
       community.libvirt.virt:
         command: destroy
+        force: true
+        name: "{{ item }}"
+      loop: "{{ allvms }}"
+      ignore_errors: true
+
+    - name: Undefine all vms
+      community.libvirt.virt:
+        command: undefine
         force: true
         name: "{{ item }}"
       loop: "{{ allvms }}"

@@ -1,4 +1,4 @@
-{{ master0ip.stdout_lines | first  }} master-0.{{ clustername }}.{{ basedomain }}
+{{ master0ip.stdout_lines | first  }} {{ clustername }}-master-0.{{ basedomain }}
 {{ master0ip.stdout_lines | first  }} api.{{ clustername }}.{{ basedomain }}
 {{ master0ip.stdout_lines | first  }} api-int.{{ clustername }}.{{ basedomain }}
 
