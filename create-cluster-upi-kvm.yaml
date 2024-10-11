@@ -370,15 +370,15 @@
     #     template: "scheduler.yaml.j2"
     #   when: sno != "true"
 
-    - name: Pause cronjob ocp-csr-approver
-      kubernetes.core.k8s:
-        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
-        state: present
-        definition:
-          apiVersion: batch/v1
-          kind: CronJob
-          metadata:
-            name: "ocp-csr-approver"
-            namespace: "ocp-csr-approver"
-          spec:
-            suspend: true
+    # - name: Pause cronjob ocp-csr-approver
+    #   kubernetes.core.k8s:
+    #     kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    #     state: present
+    #     definition:
+    #       apiVersion: batch/v1
+    #       kind: CronJob
+    #       metadata:
+    #         name: "ocp-csr-approver"
+    #         namespace: "ocp-csr-approver"
+    #       spec:
+    #         suspend: true
