@@ -5,11 +5,6 @@
   become_method: ansible.builtin.sudo
 
   tasks:
-    - name: Getting master mac address
-      ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-0 | grep 'mac address' | grep 'mac address' | sed 's/.*mac address='\\''\\([^'\\'']*\\)'\\''.*/\\1/'"
-      register: master_info
-      until: master_info is defined and master_info.stdout != ""
-
     - name: Get a list of all virtual machines
       ansible.builtin.command: virsh list --all --name
       register: vms
@@ -17,55 +12,34 @@
 
     - name: Filter VMs containing 'clustername' in their names
       ansible.builtin.set_fact:
-        allvms: "{{ vms.stdout_lines | select('search', 'donkey-apu07') }}"
-
-    - name: Gather MAC addresses of VMs
-      ansible.builtin.command: virsh domiflist {{ item }}
-      loop: "{{ allvms }}"
-      register: vm_interfaces
-      changed_when: vm_interfaces.rc == 0
+        allvms: "{{ vms.stdout_lines | select('search', clustername) }}"
 
     - name: Remove all vms
       community.libvirt.virt:
-        command: undefine
+        command: destroy
         force: true
         name: "{{ item }}"
       loop: "{{ allvms }}"
+      ignore_errors: true
 
     - name: Delete all network files
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
+      register: deletefiles
       with_items:
         - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
         - "/etc/dnsmasq.{{ clustername }}.addnhosts"
         - "/{{ clusters_dir }}/{{ clustername }}/"
 
-    - name: Deleting master mac on DHCP
-      community.libvirt.virt_net:
-        name: "{{ kvmnetwork }}"
-        command: destroy
-        xml: "<host mac='{{ master_info.stdout }}' ip='{{ master0ip }}'/>"
-      register: master_info
-
-    - name: Deleting worker mac on DHCP
-      community.libvirt.virt_net:
-        name: "{{ kvmnetwork }}"
-        command: modify
-        xml: "<host mac='{{ mac_addresses[item | int - 1] | first }}' ip='{{ worker_ips[item | int - 1] }}'/>"
-      register: master_info
-      with_sequence: count={{ n_worker }}
-      when: n_worker != 0
-
-    - name: Ensure lines containing are removed
-      ansible.builtin.lineinfile:
-        path: "/var/lib/libvirt/dnsmasq/{{ kvmnetwork }}.hostsfile"
-        regexp: '{{ clustername }}'
-        state: absent
-      register: cleandhcp
-
     - name: Restart libvirt when configuring dnsmasq
       ansible.builtin.service:
         name: libvirtd
         state: restarted
-      when: cleandhcp.changed
+      when: deletefiles.changed
+
+    - name: Restart NetworkManager when configuring dnsmasq
+      ansible.builtin.service:
+        name: NetworkManager
+        state: restarted
+      when: deletefiles.changed

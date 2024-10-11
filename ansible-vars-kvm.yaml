@@ -1,4 +1,4 @@
-clustername: donkey-apu08
+clustername: bump-bart
 basedomain: chiaret.to
 ocpversion: 4.16.16
 clusters_dir: "/labs" #not use / at end
@@ -7,7 +7,7 @@ kvmnetwork: default
 dnsdir: "/etc/NetworkManager/dnsmasq.d"
 worker_mem: '8192'
 worker_cpu: '4'
-n_worker: '0'
+n_worker: '2'
 master_mem: '32000'
 master_cpu: '8'
 htpasswd_pass: "Redhat@123"
