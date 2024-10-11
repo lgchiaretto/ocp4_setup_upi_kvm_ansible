@@ -47,6 +47,18 @@
         mode: '0644'
       when: installfile.stat is defined and not installfile.stat.exists
 
+    - name: Check if rhcos.iso file already exists on cache
+      ansible.builtin.stat:
+        path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+      register: rhcosisofile
+
+    - name: Download rhcos iso to cache
+      ansible.builtin.get_url:
+        url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live.x86_64.iso"
+        dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+        mode: '0644'
+      when: rhcosisofile.stat is defined and not rhcosisofile.stat.exists
+
     - name: Create cluster directory
       ansible.builtin.file:
         path: "{{ clusters_dir }}/{{ clustername }}"
@@ -120,7 +132,7 @@
       ansible.builtin.command: "coreos-installer iso ignition embed -fi worker.ign rhcos-worker.iso"
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
-      register: rhcosmaster
+      register: rhcosworker
       changed_when: true
 
     - name: Create virtual machines disks when SNO
@@ -296,17 +308,43 @@
         name: libvirtd
         state: restarted
       when: dhcpname.changed
-       
-    # - name: Starting worker nodes
-    #   ansible.builtin.command: "virsh start {{ clustername }}-worker-{{ item }}"
-    #   register: startworkervms
-    #   changed_when: startworkervms.rc == 0
-    #   with_sequence: count={{ n_worker }}
-    #   when: n_worker != 0
 
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
         minutes: 20
+
+    - name: Wait for SSH to be available on the target node
+      ansible.builtin.wait_for:
+        host: "{{ worker_ips[item | int - 1] | first }}"
+        port: 22
+        timeout: 3600
+        state: started
+        sleep: 10
+      with_sequence: count={{ n_worker }}
+
+    - name: Copy worker.ign to worker nodes
+      ansible.builtin.copy:
+        src: "{{ clusters_dir }}/{{ clustername }}/worker.ign"
+        dest: "/var/home/core/worker.ign"
+      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
+      with_sequence: count={{ n_worker }}
+      remote_user: "core"
+
+    - name: Excute coreos-installer on worker nodes
+      ansible.builtin.shell:
+        cmd: "coreos-installer install --ignition-file=/var/home/core/worker.ign /dev/vda"
+      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
+      with_sequence: count={{ n_worker }}
+      remote_user: "core"
+      become: true
+
+    - name: Rebooting worker nodes
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
+      with_sequence: count={{ n_worker }}
+      remote_user: "core"
+      become: true
 
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"
