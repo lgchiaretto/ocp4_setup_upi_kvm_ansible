@@ -95,24 +95,24 @@
         dest: "{{ clusters_dir }}/{{ clustername }}/install-config.yaml"
         mode: '0644'
 
-    # - name: Run create cluster manifests
-    #   ansible.builtin.command: "./openshift-install create manifests"
-    #   args:
-    #     chdir: "{{ clusters_dir }}/{{ clustername }}/"
-    #   register: createmanifests
-    #   changed_when: createmanifests.rc == 0
+    - name: Run create cluster manifests
+      ansible.builtin.command: "./openshift-install create manifests"
+      args:
+        chdir: "{{ clusters_dir }}/{{ clustername }}/"
+      register: createmanifests
+      changed_when: createmanifests.rc == 0
 
-    # - name: Creating CSR Approver manifests
-    #   ansible.builtin.template:
-    #     src: "{{ item }}.yaml.j2"
-    #     dest: "{{ clusters_dir }}/{{ clustername }}/openshift/99_{{ item }}.yaml"
-    #     mode: '0644'
-    #   loop:
-    #     - csr-approver-sa
-    #     - csr-approver-cr
-    #     - csr-approver-crb
-    #     - csr-approver-rb
-    #     - csr-approver-cronjob
+    - name: Creating CSR Approver manifests
+      ansible.builtin.template:
+        src: "{{ item }}.yaml.j2"
+        dest: "{{ clusters_dir }}/{{ clustername }}/openshift/99_{{ item }}.yaml"
+        mode: '0644'
+      loop:
+        - csr-approver-sa
+        - csr-approver-cr
+        - csr-approver-crb
+        - csr-approver-rb
+        - csr-approver-cronjob
 
     - name: Run create single-node-ignition-config files
       ansible.builtin.command: "./openshift-install create single-node-ignition-config"
