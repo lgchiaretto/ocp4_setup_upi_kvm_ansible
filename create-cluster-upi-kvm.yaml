@@ -190,9 +190,9 @@
 
     - name: Adding master mac on DHCP
       community.libvirt.virt_net:
-        name: ocp
+        name: "{{ kvmnetwork }}"
         command: modify
-        xml: "<host mac='{{ master_info.stdout }}' name='{{ clustername }}-master-0.chiaret.to' ip='{{ master0ip }}'/>"
+        xml: "<host mac='{{ master_info.stdout }}' ip='{{ master0ip }}'/>"
       register: master_info
 
     # - name: Adding master mac on DHCP
@@ -200,20 +200,20 @@
     #                           ip='{{ master0ip }}' name='{{ clustername }}-master-0.chiaret.to'/>\" --live --config"
     #   register: master_info
 
-    - name: Restart Network Manager when configuring dnsmasq
-      ansible.builtin.service:
-        name: NetworkManager
-        state: restarted
+    # - name: Restart Network Manager when configuring dnsmasq
+    #   ansible.builtin.service:
+    #     name: NetworkManager
+    #     state: restarted
 
-    - name: Restart libvirt when configuring dnsmasq
-      ansible.builtin.service:
-        name: libvirtd
-        state: restarted
+    # - name: Restart libvirt when configuring dnsmasq
+    #   ansible.builtin.service:
+    #     name: libvirtd
+    #     state: restarted
 
     - name: Define KVM Workers
-      ansible.builtin.command: virt-install  --import --name {{ clustername }}-{{ item.name }}   \
+      ansible.builtin.command: virt-install  --import --name {{ clustername }}-worker-{{ item }}   \
             --disk {{ clusters_dir }}/{{ clustername }}/worker-{{ item }}.qcow2,bus=virtio,size=120 \
-            --disk {{ clusters_dir }}/{{ clustername }}/rhcos-master.iso,device=cdrom \
+            --disk {{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso,device=cdrom \
             --boot hd,cdrom --noreboot --noautoconsole \
             --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio \
       register: createworkers
@@ -223,19 +223,52 @@
       with_sequence: count={{ n_worker }}
       when: n_worker != 0
 
-    # - name: Starting virtual machines when SNO
-    #   ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
-    #   register: startsnovms
-    #   changed_when: startsnovms.rc == 0
-    #   with_items:
-    #     - "master-0"
+    - name: Get a list of all virtual machines
+      ansible.builtin.command: virsh list --all --name
+      register: vms
+      changed_when: vms.rc == 0
 
-    # - name: Starting worker nodes
-    #   ansible.builtin.command: "virsh start {{ clustername }}-worker-{{ item }}"
-    #   register: startworkervms
-    #   changed_when: startworkervms.rc == 0
-    #   with_sequence: count={{ n_worker }}
-    #   when: n_worker != 0
+    - name: Filter VMs containing 'worker' in their names
+      ansible.builtin.set_fact:
+        worker_vms: "{{ vms.stdout_lines | select('search', '-worker') }}"
+
+    - name: Gather MAC addresses of VMs
+      ansible.builtin.command: virsh domiflist {{ item }}
+      loop: "{{ worker_vms }}"
+      register: vm_interfaces
+      changed_when: vm_interfaces.rc == 0
+
+    - name: Extract MAC addresses from interface information
+      ansible.builtin.set_fact:
+        mac_addresses: "{{ mac_addresses | default([]) + [item.stdout | regex_findall('([\\w:]{17})')] }}"
+      loop: "{{ vm_interfaces.results }}"
+
+    # - name: Display MAC addresses
+    #   debug:
+    #     var: mac_addresses
+
+    - name: Adding worker mac on DHCP
+      community.libvirt.virt_net:
+        name: "{{ kvmnetwork }}"
+        command: modify
+        xml: "<host mac='{{ mac_addresses[item | int - 1] | first }}' ip='{{ worker_ips[item | int - 1] }}'/>"
+      register: master_info
+      with_sequence: count={{ n_worker }}
+      when: n_worker != 0
+
+    - name: Starting virtual machines when SNO
+      ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
+      register: startsnovms
+      changed_when: startsnovms.rc == 0
+      with_items:
+        - "master-0"
+
+    - name: Starting worker nodes
+      ansible.builtin.command: "virsh start {{ clustername }}-worker-{{ item }}"
+      register: startworkervms
+      changed_when: startworkervms.rc == 0
+      with_sequence: count={{ n_worker }}
+      when: n_worker != 0
 
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
