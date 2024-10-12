@@ -23,6 +23,19 @@ vim ansible-vars-kvm.yaml
 
 ansible-galaxy collection install -r requirements.yml
 
+
+#  Fedora 40
+
+vim /etc/systemd/resolved.conf
+
+[Resolve]
+DNS=127.0.0.1
+Domains="~."
+
+systemctl restart systemd-resolved
+
+resolvectl status
+
 # Run playbook
 
 ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm.yaml
