@@ -1,4 +1,4 @@
-This automation is used to create Openshift Single Node Clusters (SNO) a KVM host running libvirt.
+This automation is used to create Openshift Single Node Clusters (SNO) in a KVM host running libvirt.
 
 ⚠️ Important Notice
 
