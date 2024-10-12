@@ -394,7 +394,14 @@
       kubernetes.core.k8s:
         kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
         state: present
-        template: "csr-approver-ns.yaml.j2"
+        template: "{{ item }}.yaml.j2"
+      loop:
+        - csr-approver-ns
+        - csr-approver-sa
+        - csr-approver-cr
+        - csr-approver-crb
+        - csr-approver-rb
+        - csr-approver-cronjob
       ignore_errors: true
 
     - name: Run wait-for install-complete
