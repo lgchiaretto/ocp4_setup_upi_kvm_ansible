@@ -1,6 +1,5 @@
 - name: Create clusters UPI on KVM
   hosts: localhost
-  become: true
   become_method: sudo
 
   tasks:
@@ -11,12 +10,14 @@
           [main]
           dns=dnsmasq
       register: configdnsmasq
+      become: true
 
     - name: Restart Network Manager when configuring dnsmasq
       ansible.builtin.service:
         name: NetworkManager
         state: restarted
       when: configdnsmasq.changed
+      become: true
 
     - name: Ensure necessary packages are installed
       ansible.builtin.yum:
@@ -27,27 +28,35 @@
           - virt-manager
           - guestfs-tools
         state: present
+      become: true
 
     - name: Ensure libvirtd service is running
       ansible.builtin.service:
         name: libvirtd
         state: started
         enabled: true
+      become: true
 
     - name: Installing coreos-installer
       ansible.builtin.dnf:
         name: "https://rpmfind.net/linux/fedora/linux/updates/40/Everything/x86_64/Packages/c/coreos-installer-0.22.1-3.fc40.x86_64.rpm"
         state: present
+      become: true
 
     - name: Create the OCP version cache directory if it does not exist
       ansible.builtin.file:
         path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/"
         state: directory
         mode: '0755'
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
+      become: true
 
     - name: Check if the installer file already exists on cache
       ansible.builtin.stat:
         path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
       register: installfile
 
     - name: Download installer openshift-install-linux.tar.gz to cache
@@ -55,6 +64,9 @@
         url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ ocpversion }}/openshift-install-linux.tar.gz"
         dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
         mode: '0644'
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
+      become: true
       when: installfile.stat is defined and not installfile.stat.exists
 
     - name: Check if rhcos.iso file already exists on cache
@@ -67,6 +79,9 @@
         url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live.x86_64.iso"
         dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
         mode: '0644'
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
+      become: true
       when: rhcosisofile.stat is defined and not rhcosisofile.stat.exists
 
     - name: Create cluster directory
@@ -74,6 +89,9 @@
         path: "{{ clusters_dir }}/{{ clustername }}"
         state: "directory"
         mode: "0755"
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
+      become: true
 
     - name: Copy openshift-install.tar.gz to cluster dir
       ansible.builtin.copy:
@@ -147,6 +165,7 @@
             --boot hd,cdrom --check path_in_use=off --noreboot --noautoconsole \
             --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio
       register: createnodes
+      become: true
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: createnodes.rc == 0
@@ -155,6 +174,7 @@
       ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
       register: startsnovms
       changed_when: startsnovms.rc == 0
+      become: true
       with_items:
         - "master-0"
 
@@ -164,6 +184,7 @@
       until: master_info is defined and master_info.stdout != ""
       retries: "180"
       delay: "1"
+      become: true
       changed_when: true
 
     - name: Wait for the master VM to get an IP address
@@ -172,6 +193,7 @@
       delay: "3"
       until: master0ip.stdout is defined and master0ip.stdout != ""
       register: master0ip
+      become: true
       changed_when: true
 
     - name: Create cluster network conf on dnsmasq
@@ -184,6 +206,7 @@
         setype: dnsmasq_etc_t
         seuser: system_u
       register: dnsmasq
+      become: true
 
     - name: Create addnhosts file
       ansible.builtin.template:
@@ -191,18 +214,21 @@
         dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
         mode: '0644'
       register: addnhosts
+      become: true
 
     - name: Restart Network Manager when configuring dnsmasq
       ansible.builtin.service:
         name: NetworkManager
         state: restarted
       when: dnsmasq.changed
+      become: true
 
     - name: Restart libvirt when configuring dnsmasq
       ansible.builtin.service:
         name: libvirtd
         state: restarted
       when: dnsmasq.changed
+      become: true
 
     - name: Adding master mac on DHCP
       community.libvirt.virt_net:
@@ -210,6 +236,7 @@
         command: modify
         xml: "<host mac='{{ master_info.stdout_lines | first }}' ip='{{ master0ip.stdout_lines | first }}'/>"
       register: master_info
+      become: true
 
     - name: Define KVM Workers
       ansible.builtin.command: virt-install  --import --name {{ clustername }}-worker-{{ item }}   \
@@ -223,6 +250,7 @@
       changed_when: createworkers.rc == 0
       with_sequence: count={{ n_worker }}
       when: n_worker != 0
+      become: true
 
     - name: Wait for the worker VM's to get an IP address
       ansible.builtin.shell: "virsh domifaddr {{ clustername }}-worker-{{ item }} | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
@@ -232,17 +260,20 @@
       register: workerip
       with_sequence: count={{ n_worker }}
       when: n_worker != 0
+      become: true
 
     - name: Get a list of all virtual machines
       ansible.builtin.command: virsh list --all --name
       register: vms
       changed_when: vms.rc == 0
+      become: true
 
     #  TODO: fix
     - name: Filter VMs containing 'worker' in their names
       ansible.builtin.set_fact:
         worker_vms: "{{ vms.stdout_lines | select('search', 'worker') }}"
       when: n_worker != 0
+      become: true
 
     - name: Gather MAC addresses of VMs
       ansible.builtin.command: virsh domifaddr {{ item }}
@@ -250,6 +281,7 @@
       register: vm_interfaces
       changed_when: vm_interfaces.rc == 0
       when: n_worker != 0
+      become: true
 
     # - name: Display vm_interfaces
     #   ansible.builtin.debug:
@@ -261,6 +293,7 @@
         worker_ips: "{{ worker_ips | default([]) + [item.stdout | regex_findall('\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}')] }}"
       loop: "{{ vm_interfaces.results }}"
       when: n_worker != 0
+      become: true
 
     # - name: Display MAC addresses
     #   ansible.builtin.debug:
@@ -278,6 +311,7 @@
       register: worker_info
       with_sequence: count={{ n_worker }}
       when: n_worker != 0
+      become: true
 
     - name: Adding worker names on dhcp
       ansible.builtin.lineinfile:
@@ -287,18 +321,21 @@
       register: dhcpname
       with_sequence: count={{ n_worker }}
       when: n_worker != 0
+      become: true
 
     - name: Restart Network Manager when configuring dnsmasq
       ansible.builtin.service:
         name: NetworkManager
         state: restarted
       when: dhcpname.changed
+      become: true
 
     - name: Restart libvirt when configuring dnsmasq
       ansible.builtin.service:
         name: libvirtd
         state: restarted
       when: dhcpname.changed
+      become: true
 
     - name: Add StrictHostKeyChecking option to SSH config
       ansible.builtin.lineinfile:
@@ -310,7 +347,6 @@
         insertafter: EOF
         owner: "{{ ansible_facts['user_id'] }}"
         group: "{{ ansible_facts['user_id'] }}"
-      become: false
 
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
@@ -339,7 +375,6 @@
       delegate_to: "{{ worker_ips[item | int - 1] | first }}"
       with_sequence: count={{ n_worker }}
       remote_user: "core"
-      become: true
 
     - name: Rebooting worker nodes
       ansible.builtin.reboot:
@@ -347,7 +382,6 @@
       delegate_to: "{{ worker_ips[item | int - 1] | first }}"
       with_sequence: count={{ n_worker }}
       remote_user: "core"
-      become: true
 
     - name: Creating CSR Approver manifests
       kubernetes.core.k8s:
