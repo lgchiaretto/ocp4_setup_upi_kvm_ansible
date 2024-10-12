@@ -30,7 +30,7 @@
       register: resolved
       when:
         - ansible_facts['distribution'] == 'Fedora'
-        - resolved_status.stdout == 'active'
+        - resolved_status.state == 'started'
 
     - name: Restart Network Manager when configuring dnsmasq
       ansible.builtin.service:
