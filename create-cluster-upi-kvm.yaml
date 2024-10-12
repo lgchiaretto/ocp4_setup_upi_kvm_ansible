@@ -373,6 +373,7 @@
       delegate_to: "{{ worker_ips[item | int - 1] | first }}"
       with_sequence: count={{ n_worker }}
       remote_user: "core"
+      become: true
 
     - name: Rebooting worker nodes
       ansible.builtin.reboot:
@@ -380,6 +381,7 @@
       delegate_to: "{{ worker_ips[item | int - 1] | first }}"
       with_sequence: count={{ n_worker }}
       remote_user: "core"
+      become: true
 
     - name: Creating CSR Approver manifests
       kubernetes.core.k8s:
