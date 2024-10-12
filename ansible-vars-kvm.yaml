@@ -1,9 +1,9 @@
-clustername: dummy-smithers
+clustername: doido-smithers
 basedomain: chiaret.to
 ocpversion: 4.16.16
 clusters_dir: "/labs" #not use / at end
 sno: 'true'
-kvmnetwork: default
+kvmnetwork: br1
 dnsdir: "/etc/NetworkManager/dnsmasq.d"
 worker_mem: '8192'
 worker_cpu: '4'
