@@ -231,7 +231,7 @@
     - name: Create cluster network conf on dnsmasq
       ansible.builtin.template:
         src: "cluster-network.conf.j2"
-        dest: "{{ dnsdir }}/{{ clustername }}.conf"
+        dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
         mode: '0644'
         selevel: s0
         serole: object_r
