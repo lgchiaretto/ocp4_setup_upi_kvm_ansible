@@ -1,4 +1,4 @@
-# OpenShift Single Node Cluster (SNO) on KVM with Libvirt
+# OpenShift 4 Automated Cluster Installation (UPI on KVM)
 
 This automation helps you create an OpenShift Single Node Cluster (SNO) on a KVM host using Libvirt.
 
