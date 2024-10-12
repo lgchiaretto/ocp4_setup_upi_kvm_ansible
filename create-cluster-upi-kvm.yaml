@@ -55,8 +55,6 @@
     - name: Check if the installer file already exists on cache
       ansible.builtin.stat:
         path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
-        owner: "{{ lookup('env', 'USER') }}"
-        group: "{{ lookup('env', 'USER') }}"
       register: installfile
 
     - name: Download installer openshift-install-linux.tar.gz to cache
