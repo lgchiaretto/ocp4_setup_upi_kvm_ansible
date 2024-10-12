@@ -38,7 +38,6 @@
       ansible.builtin.service:
         name: NetworkManager
         state: restarted
-      when: configdnsmasq.changed
       become: true
 
     - name: Restart systemd-resolved when configuring dnsmasq
