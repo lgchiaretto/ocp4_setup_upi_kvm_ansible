@@ -21,6 +21,11 @@
         state: started
         enabled: true
 
+    - name: Installing coreos-installer
+      ansible.builtin.dnf:
+        name: "https://rpmfind.net/linux/fedora/linux/updates/40/Everything/x86_64/Packages/c/coreos-installer-0.22.1-3.fc40.x86_64.rpm"
+        state: present
+
     - name: Configuring networkmanager to use dnsmasq
       ansible.builtin.copy:
         dest: "/etc/NetworkManager/conf.d/nm-dns.conf"
