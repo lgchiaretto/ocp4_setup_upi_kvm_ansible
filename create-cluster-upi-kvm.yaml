@@ -27,6 +27,7 @@
           - virt-install
           - virt-manager
           - guestfs-tools
+          - python3-pip
         state: present
       become: true
 
