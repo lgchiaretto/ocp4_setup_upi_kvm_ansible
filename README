@@ -2,7 +2,7 @@ This automation is used to create Openshift Single Node Clusters (SNO) a KVM hos
 
 Prereq:
 
-# Install ansible-core and coreos-installer
+# Install ansible-core
 
 sudo dnf install -y ansible-core
 
