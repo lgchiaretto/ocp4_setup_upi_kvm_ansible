@@ -8,7 +8,7 @@ sudo dnf install -y ansible-core
 
 #  Generate an SSH key if don't have one
 
-ssh-keygen 
+ssh-keygen -t rsa
 
 
 #  Edit the ansible vars and fill the parameters. 
