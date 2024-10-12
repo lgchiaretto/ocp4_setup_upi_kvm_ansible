@@ -1,31 +1,46 @@
-This automation is used to create Openshift Single Node Clusters (SNO) in a KVM host running libvirt.
+OpenShift Single Node Cluster (SNO) on KVM with Libvirt
 
+This automation helps you create an OpenShift Single Node Cluster (SNO) on a KVM host using Libvirt.
 ⚠️ Important Notice
 
-Please be cautious when running this playbook, as the initial tasks modify network settings. 
-Ensure you fully understand the changes and have appropriate backups or recovery options in place before proceeding. 
-Running these tasks without careful review may lead to connectivity issues or unintended network configuration changes.
+Please exercise caution when running this playbook, as the initial tasks modify network settings. Ensure that you fully understand the changes being made and have appropriate backups or recovery plans in place before proceeding. Running these tasks without careful review may lead to connectivity issues or unintended network configuration changes.
+Prerequisites
+1. Install Ansible Core
 
-Prereq:
+To install ansible-core, run the following command:
 
-# Install ansible-core
+bash
 
 sudo dnf install -y ansible-core
 
-#  Generate an SSH key if don't have one
+2. Generate an SSH Key
+
+If you don't already have an SSH key, generate one using:
+
+bash
 
 ssh-keygen -t rsa
 
-#  Edit the ansible vars and fill the parameters. 
-#  You have to configure 'sshrsa' and 'pullsecret'
-#  access https://console.redhat.com/openshift/create/local and click "Download pull secret"
+3. Edit Ansible Variables
+
+Before running the playbook, edit the Ansible variables file and fill in the required parameters, such as sshrsa and pullsecret. You can obtain the pull secret by accessing Red Hat OpenShift Local and clicking "Download pull secret".
+
+bash
 
 vim ansible-vars-kvm.yaml
 
-# Some collections are needed
+4. Install Required Ansible Collections
+
+Some Ansible collections are required to run this playbook. Install them by running:
+
+bash
 
 ansible-galaxy collection install -r requirements.yml
 
-# Run playbook
+Usage
+
+Once the prerequisites are met and variables are configured, run the playbook as follows:
+
+bash
 
 ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm.yaml
