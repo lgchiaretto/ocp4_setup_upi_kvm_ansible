@@ -5,7 +5,8 @@ This automation helps you create an OpenShift Single Node Cluster (SNO) on a KVM
 ## ⚠️ Important Notice
 
 Please exercise caution when running this playbook, as the initial tasks modify network settings. Ensure that you fully understand the changes being made and have appropriate backups or recovery plans in place before proceeding. Running these tasks without careful review may lead to connectivity issues or unintended network configuration changes.
-Prerequisites
+
+# Prerequisites
 
 ## Install Ansible Core
 
@@ -40,7 +41,7 @@ Some Ansible collections are required to run this playbook. Install them by runn
 ansible-galaxy collection install -r requirements.yml
 ```
 
-## Usage
+# Usage
 
 Once the prerequisites are met and variables are configured, run the playbook as follows:
 
