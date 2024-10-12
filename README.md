@@ -42,8 +42,19 @@ ansible-galaxy collection install -r requirements.yml
 
 ## Usage
 
-## Once the prerequisites are met and variables are configured, run the playbook as follows:
+Once the prerequisites are met and variables are configured, run the playbook as follows:
 
 ```
 ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm.yaml
 ```
+
+## Tested Environments
+
+This playbook has been successfully tested on the following distributions:
+
+    Fedora 40
+    RHEL 8
+    RHEL 9
+
+Ensure that your environment meets these system requirements for the best results.
+
