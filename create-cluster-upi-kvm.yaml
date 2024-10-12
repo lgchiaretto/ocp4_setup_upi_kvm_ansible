@@ -27,6 +27,7 @@
           [Resolve]
           DNS=127.0.0.1
           Domains="~."
+        create: true
       register: resolved
       when:
         - ansible_facts['distribution'] == 'Fedora'
