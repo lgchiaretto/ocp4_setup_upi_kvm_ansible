@@ -32,6 +32,7 @@
       when:
         - ansible_facts['distribution'] == 'Fedora'
         - resolved_status.state == 'started'
+      become: true
 
     - name: Restart Network Manager when configuring dnsmasq
       ansible.builtin.service:
@@ -46,6 +47,10 @@
         state: restarted
       when: resolved.changed and ansible_facts['distribution'] == 'Fedora'
       become: true
+
+    - name: Sleeping 5 seconds to wait NetworkManager
+      ansible.builtin.pause:
+        seconds: 5
 
     - name: Ensure necessary packages are installed
       ansible.builtin.yum:
