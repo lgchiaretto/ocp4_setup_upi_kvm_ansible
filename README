@@ -1,5 +1,11 @@
 This automation is used to create Openshift Single Node Clusters (SNO) a KVM host running libvirt.
 
+⚠️ Important Notice
+
+Please be cautious when running this playbook, as the initial tasks modify network settings. 
+Ensure you fully understand the changes and have appropriate backups or recovery options in place before proceeding. 
+Running these tasks without careful review may lead to connectivity issues or unintended network configuration changes.
+
 Prereq:
 
 # Install ansible-core
@@ -10,7 +16,6 @@ sudo dnf install -y ansible-core
 
 ssh-keygen -t rsa
 
-
 #  Edit the ansible vars and fill the parameters. 
 #  You have to configure 'sshrsa' and 'pullsecret'
 #  access https://console.redhat.com/openshift/create/local and click "Download pull secret"
@@ -20,26 +25,6 @@ vim ansible-vars-kvm.yaml
 # Some collections are needed
 
 ansible-galaxy collection install -r requirements.yml
-
-
-#  Fedora 40
-
-# vim /etc/systemd/resolved.conf
-
-# [Resolve]
-# DNS=127.0.0.1
-# Domains="~."
-
-# systemctl restart systemd-resolved
-
-# resolvectl status
-
-
-#  RHEL 8 and 9
-
-# sudo su
-# echo -e "[main]\ndns=dnsmasq" > /etc/NetworkManager/conf.d/nm-dns.conf
-# systemctl restart NetworkManager
 
 # Run playbook
 

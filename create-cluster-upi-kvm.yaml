@@ -315,10 +315,6 @@
       when: n_worker != 0
       become: true
 
-    # - name: Display vm_interfaces
-    #   ansible.builtin.debug:
-    #     var: vm_interfaces
-
     - name: Extract MAC addresses from interface information
       ansible.builtin.set_fact:
         mac_addresses: "{{ mac_addresses | default([]) + [item.stdout | regex_findall('([\\w:]{17})')] }}"
@@ -326,14 +322,6 @@
       loop: "{{ vm_interfaces.results }}"
       when: n_worker != 0
       become: true
-
-    # - name: Display MAC addresses
-    #   ansible.builtin.debug:
-    #     var: mac_addresses
-
-    # - name: Display IP addresses
-    #   ansible.builtin.debug:
-    #     var: worker_ips
 
     - name: Adding worker mac on DHCP
       community.libvirt.virt_net:
@@ -447,13 +435,6 @@
       until: job_result.finished
       delay: 10
       retries: 600
-
-    # - name: Disabling master as worker
-    #   kubernetes.core.k8s:
-    #     kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
-    #     state: present
-    #     template: "scheduler.yaml.j2"
-    #   when: sno != "true"
 
     # - name: Pause cronjob ocp-csr-approver
     #   kubernetes.core.k8s:
