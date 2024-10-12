@@ -169,7 +169,7 @@
       changed_when: true
 
     - name: Create worker disks
-      ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-worker-{{ item }}.qcow2 120G"
+      ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-worker-{{ item | int + 1 }}.qcow2 120G"
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       with_sequence: count={{ n_worker }} start=0
