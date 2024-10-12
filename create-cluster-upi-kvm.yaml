@@ -12,6 +12,14 @@
       register: configdnsmasq
       become: true
 
+    - name: Check if systemd-resolved is active and running (Fedora only)
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: started
+      register: resolved_status
+      ignore_errors: true
+      when: ansible_facts['distribution'] == 'Fedora'
+
     - name: Ensure the [Resolve] block is present in /etc/systemd/resolved.conf (Fedora only)
       ansible.builtin.blockinfile:
         path: /etc/systemd/resolved.conf
@@ -20,7 +28,9 @@
           DNS=127.0.0.1
           Domains="~."
       register: resolved
-      when: ansible_facts['distribution'] == 'Fedora'
+      when:
+        - ansible_facts['distribution'] == 'Fedora'
+        - resolved_status.stdout == 'active'
 
     - name: Restart Network Manager when configuring dnsmasq
       ansible.builtin.service:
