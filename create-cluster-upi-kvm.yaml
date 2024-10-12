@@ -1,13 +1,23 @@
 - name: Create clusters UPI on KVM
   hosts: localhost
-  gather_facts: false
   become: true
   become_method: sudo
 
-  vars:
-    mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
-
   tasks:
+    - name: Configuring networkmanager to use dnsmasq
+      ansible.builtin.copy:
+        dest: "/etc/NetworkManager/conf.d/nm-dns.conf"
+        content: |
+          [main]
+          dns=dnsmasq
+      register: configdnsmasq
+
+    - name: Restart Network Manager when configuring dnsmasq
+      ansible.builtin.service:
+        name: NetworkManager
+        state: restarted
+      when: configdnsmasq.changed
+
     - name: Ensure necessary packages are installed
       ansible.builtin.yum:
         name:
@@ -24,31 +34,10 @@
         state: started
         enabled: true
 
-    - name: Configuring networkmanager to use dnsmasq
-      ansible.builtin.copy:
-        dest: "/etc/NetworkManager/conf.d/nm-dns.conf"
-        content: |
-          [main]
-          dns=dnsmasq
-      register: configdnsmasq
-
-    - name: Create cluster network conf on dnsmasq
-      ansible.builtin.template:
-        src: "cluster-network.conf.j2"
-        dest: "{{ dnsdir }}/{{ clustername }}.conf"
-        mode: '0644'
-        selevel: s0
-        serole: object_r
-        setype: dnsmasq_etc_t
-        seuser: system_u
-      register: dnsmasq
-
-    - name: Create addnhosts file
-      ansible.builtin.template:
-        src: "dnsmasq.openshift.addnhosts.j2"
-        dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
-        mode: '0644'
-      register: addnhosts
+    - name: Installing coreos-installer
+      ansible.builtin.dnf:
+        name: "https://rpmfind.net/linux/fedora/linux/updates/40/Everything/x86_64/Packages/c/coreos-installer-0.22.1-3.fc40.x86_64.rpm"
+        state: present
 
     - name: Create the OCP version cache directory if it does not exist
       ansible.builtin.file:
@@ -68,22 +57,17 @@
         mode: '0644'
       when: installfile.stat is defined and not installfile.stat.exists
 
-    - name: Restart Network Manager when configuring dnsmasq
-      ansible.builtin.service:
-        name: NetworkManager
-        state: restarted
-      when: dnsmasq.changed
+    - name: Check if rhcos.iso file already exists on cache
+      ansible.builtin.stat:
+        path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+      register: rhcosisofile
 
-    - name: Restart libvirt when configuring dnsmasq
-      ansible.builtin.service:
-        name: libvirtd
-        state: restarted
-      when: dnsmasq.changed
-
-    # - name: Sleeping 3 seconds to wait NetworkManager
-    #   ansible.builtin.pause:
-    #     seconds: 3
-    #   when: dnsmasq.changed
+    - name: Download rhcos iso to cache
+      ansible.builtin.get_url:
+        url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live.x86_64.iso"
+        dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+        mode: '0644'
+      when: rhcosisofile.stat is defined and not rhcosisofile.stat.exists
 
     - name: Create cluster directory
       ansible.builtin.file:
@@ -103,272 +87,136 @@
         src: "{{ clusters_dir }}/{{ clustername }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
         dest: "{{ clusters_dir }}/{{ clustername }}"
 
+    - name: Copy rhcos.iso to cluster dir to master
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+        dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-master.iso"
+
+    - name: Copy rhcos.iso to cluster dir to worker
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+        dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso"
+
     - name: Copy install-config.yaml
       ansible.builtin.template:
         src: install-config.yaml-upi.j2
         dest: "{{ clusters_dir }}/{{ clustername }}/install-config.yaml"
         mode: '0644'
 
-    - name: Run create cluster manifests
-      ansible.builtin.command: "./openshift-install create manifests"
-      args:
-        chdir: "{{ clusters_dir }}/{{ clustername }}/"
-      register: createmanifests
-      changed_when: createmanifests.rc == 0
-
-    - name: Configuring master as schedulable
-      ansible.builtin.replace:
-        path: "{{ clusters_dir }}/{{ clustername }}/manifests/cluster-scheduler-02-config.yml"
-        regexp: "mastersSchedulable: false"
-        replace: "mastersSchedulable: true"
-
-    - name: Creating CSR Approver manifests
-      ansible.builtin.template:
-        src: "{{ item }}.yaml.j2"
-        dest: "{{ clusters_dir }}/{{ clustername }}/openshift/99_{{ item }}.yaml"
-        mode: '0644'
-      loop:
-        - csr-approver-sa
-        - csr-approver-cr
-        - csr-approver-crb
-        - csr-approver-rb
-        - csr-approver-cronjob
-
-    - name: Run create ignition files
-      ansible.builtin.command: "./openshift-install create ignition-configs"
+    - name: Run create single-node-ignition-config files
+      ansible.builtin.command: "./openshift-install create single-node-ignition-config"
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       register: install
       changed_when: true
 
-    - name: Check if the RHCOS file already exists on cache
-      ansible.builtin.stat:
-        path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-qemu.x86_64.qcow2"
-      register: rhcosfile
-
-    - name: Check if the initramfs file already exists on cache
-      ansible.builtin.stat:
-        path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/initramfs.img"
-      register: initramfsfile
-
-    - name: Check if the rhcos-live-kernel-x86_64 file already exists on cache
-      ansible.builtin.stat:
-        path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/vmlinuz"
-      register: kernelfile
-
-    - name: Check if the rhcos-live-rootfs.x86_64.img file already exists on cache
-      ansible.builtin.stat:
-        path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-live-rootfs.x86_64.img"
-      register: rootfsfile
-
-    - name: Download RHCOS images
-      ansible.builtin.get_url:
-        url: "{{ mirror_url  }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-qemu.x86_64.qcow2.gz"
-        dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-qemu.x86_64.qcow2.gz"
-      when: rhcosfile.stat is defined and not rhcosfile.stat.exists
-
-    - name: Download rootfs file
-      ansible.builtin.get_url:
-        url: "{{ mirror_url  }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-rootfs.x86_64.img"
-        dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-live-rootfs.x86_64.img"
-      when: rootfsfile.stat is defined and not rootfsfile.stat.exists
-
-    - name: Download initramfs images
-      ansible.builtin.get_url:
-        url: "{{ mirror_url  }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-initramfs.x86_64.img"
-        dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/initramfs.img"
-      when: initramfsfile.stat is defined and not initramfsfile.stat.exists
-
-    - name: Download rhcos-live-kernel-x86_64 images
-      ansible.builtin.get_url:
-        url: "{{ mirror_url  }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-kernel-x86_64"
-        dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/vmlinuz"
-      when: kernelfile.stat is defined and not kernelfile.stat.exists
-
-    - name: Create rhcos-install directory directory
-      ansible.builtin.file:
-        path: "{{ clusters_dir }}/{{ clustername }}/rhcos-install"
-        state: "directory"
-        mode: "0755"
-
-    - name: Copy files to rhcos-install directory
-      ansible.builtin.copy:
-        remote_src: true
-        src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/{{ item }}"
-        dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-install/"
-      with_items:
-        - vmlinuz
-        - initramfs.img
-        - rhcos-qemu.x86_64.qcow2.gz
-        - rhcos-live-rootfs.x86_64.img
-
-    - name: Extract RHCOS image
-      ansible.builtin.command: "gunzip -f -d {{ clusters_dir }}/{{ clustername }}/rhcos-install/rhcos-qemu.x86_64.qcow2.gz"
-      register: extractdfile
-      changed_when: extractdfile.rc == 0
-
-    - name: Resizing RHCOS image
-      ansible.builtin.command: "qemu-img resize {{ clusters_dir }}/{{ clustername }}/rhcos-install/rhcos-qemu.x86_64.qcow2 120G"
-      register: resizeqcow2
-      changed_when: resizeqcow2.rc == 0
-
-    - name: Create treeinfo file
-      ansible.builtin.template:
-        src: treeinfo.j2
-        dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-install/.treeinfo"
-        mode: '0644'
-
-    - name: Create tmpws.service file
-      ansible.builtin.template:
-        src: tmpws.service.j2
-        dest: "{{ clusters_dir }}/{{ clustername }}/tmpws.service"
-        mode: '0644'
-
-    - name: Create haproxy.cfg file
-      ansible.builtin.template:
-        src: haproxy.cfg-kvm.j2
-        dest: "{{ clusters_dir }}/{{ clustername }}/haproxy.cfg"
-        mode: '0644'
-
-    - name: Create ssh file
-      ansible.builtin.copy:
-        remote_src: true
-        content: "{{ ssh_rsa }}"
-        dest: "{{ clusters_dir }}/{{ clustername }}/id_rsa.pub"
-
-# TODO: Fix ssh-insoect
-    - name: Customize LB for OpenShift nodes (could take long time)
-      ansible.builtin.command: virt-builder fedora-40 --format qcow2 --cache {{ clusters_dir }}/.cache/ --size 10G -o "lb.qcow2" \
-                              --firstboot-command "nmcli con mod 'Wired connection 1' connection.id enp1s0" \
-                              --firstboot-command "nmcli con mod enp1s0 ipv4.method manual ipv4.addresses '{{ lbvip }}/24' ipv4.gateway '{{ hostgw }}' ipv4.dns '{{ hostns }}'" \
-                              --firstboot-command "sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config" \
-                              --firstboot-command "systemctl disable firewalld" \
-                              --firstboot-command "setenforce 0" \
-                              --firstboot-command "reboot" \
-                              --ssh-inject root:file:{{ clusters_dir }}/{{ clustername }}/id_rsa.pub --selinux-relabel \
-                              --copy-in bootstrap.ign:/opt/ --copy-in master.ign:/opt/ --copy-in worker.ign:/opt/ \
-                              --copy-in tmpws.service:/etc/systemd/system/ \
-                              --hostname "lb-{{ clustername }}.{{ basedomain }}" \
-                              --install haproxy \
-                              --copy-in haproxy.cfg:/etc/haproxy/ \
-                              --copy-in rhcos-install/rhcos-live-rootfs.x86_64.img:/opt/ \
-                              --copy-in rhcos-install/initramfs.img:/opt/ \
-                              --copy-in rhcos-install/vmlinuz:/opt/ \
-                              --copy-in rhcos-install/.treeinfo:/opt/ \
-                              --run-command "systemctl daemon-reload" \
-                              --run-command "systemctl enable tmpws.service" \
-                              --run-command "systemctl enable haproxy.service" \
-                              --root-password password:"{{ htpasswd_pass }}"
-      register: customizelb
+    - name: Add bootstrap.ign to rhcos-master.iso
+      ansible.builtin.command: "coreos-installer iso ignition embed -fi bootstrap-in-place-for-live-iso.ign rhcos-master.iso"
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
-      changed_when: customizelb.rc == 0
+      register: rhcosmaster
+      changed_when: true
 
-    - name: Define and start LB
-      ansible.builtin.command: virt-install --import --name {{ clustername }}-lb --disk "lb.qcow2" \
-                              --memory 1024 --cpu host --vcpus 4 --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio \
-                              --noautoconsole --autostart
-      register: definelb
+    - name: Add worker.ign to rhcos-worker.iso
+      ansible.builtin.command: "coreos-installer iso ignition embed -fi worker.ign rhcos-worker.iso"
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
-      changed_when: definelb.rc == 0
-
- #   - name: Wait for LB to get an IP address
- #     ansible.builtin.shell: 'virsh domifaddr {{ clustername }}-lb | awk "/ipv4/ { print \$4 }" | cut -d"/" -f1'
- #     register: lb_info
- #     until: lb_info is defined and lb_info.stdout != ""
- #     retries: "180"
- #     delay: "1"
-
-    - name: Create virtual machines disks when 3 node cluster
-      ansible.builtin.copy:
-        remote_src: true
-        src: "{{ clusters_dir }}/{{ clustername }}/rhcos-install/rhcos-qemu.x86_64.qcow2"
-        dest: "{{ clusters_dir }}/{{ clustername }}/{{ item }}.qcow2"
-      with_items:
-        - "bootstrap"
-        - "master-0"
-        - "master-1"
-        - "master-2"
-      when: sno == "false"
+      register: rhcosworker
+      changed_when: true
 
     - name: Create virtual machines disks when SNO
-      ansible.builtin.copy:
-        remote_src: true
-        src: "{{ clusters_dir }}/{{ clustername }}/rhcos-install/rhcos-qemu.x86_64.qcow2"
-        dest: "{{ clusters_dir }}/{{ clustername }}/{{ item }}.qcow2"
-      with_items:
-        - "bootstrap"
-        - "master-0"
-      when: sno == "true"
+      ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-master-0.qcow2 120G"
+      args:
+        chdir: "{{ clusters_dir }}/{{ clustername }}"
+      register: qcow2master
+      changed_when: true
 
     - name: Create worker disks
-      ansible.builtin.copy:
-        remote_src: true
-        src: "{{ clusters_dir }}/{{ clustername }}/rhcos-install/rhcos-qemu.x86_64.qcow2"
-        dest: "{{ clusters_dir }}/{{ clustername }}/worker-{{ item }}.qcow2"
+      ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-worker-{{ item }}.qcow2 120G"
+      args:
+        chdir: "{{ clusters_dir }}/{{ clustername }}"
       with_sequence: count={{ n_worker }} start=0
       when: n_worker != 0
 
-    - name: Define bootstrap
-      ansible.builtin.command: virt-install --name {{ clustername }}-bootstrap \
-            --disk {{ clusters_dir }}/{{ clustername }}/bootstrap.qcow2,bus=virtio,size=120 \
-            --ram "16000" --cpu host --vcpus "8" --os-variant rhel9-unknown --pxe --network network={{ kvmnetwork }},model=virtio \
-            --location rhcos-install/ --noautoconsole \
-            --extra-args 'nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=vda \
-            coreos.live.rootfs_url=http://{{ lbvip }}:1234/rhcos-live-rootfs.x86_64.img \
-            ip={{ bootstrapip }}::{{ hostgw }}:{{ hostnw }}:bootstrap:enp1s0:none nameserver={{ hostns }} \
-            coreos.inst.ignition_url=http://{{ lbvip }}:1234/bootstrap.ign'
-      register: bootstrapnodes
-      args:
-        chdir: "{{ clusters_dir }}/{{ clustername }}"
-      changed_when: bootstrapnodes.rc == 0
-
-    - name: Define KVM masters on 3 node cluster
-      ansible.builtin.command: virt-install --name {{ clustername }}-{{ item.name }} \
-            --disk {{ clusters_dir }}/{{ clustername }}/{{ item.name }}.qcow2,bus=virtio,size=120 \
-            --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9-unknown --pxe --network network={{ kvmnetwork }},model=virtio \
-            --location rhcos-install/ --noautoconsole \
-            --extra-args 'nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=vda \
-            coreos.live.rootfs_url=http://{{ lbvip }}:1234/rhcos-live-rootfs.x86_64.img \
-            ip={{ item.ip }}::{{ hostgw }}:{{ hostnw }}:{{ item.name }}.{{ clustername }}.{{ basedomain }}:enp1s0:none nameserver={{ hostns }} \
-            coreos.inst.ignition_url=http://{{ lbvip }}:1234/{{ item.ignition }}.ign'
-      register: createnodes
-      args:
-        chdir: "{{ clusters_dir }}/{{ clustername }}"
-      changed_when: createnodes.rc == 0
-      with_items:
-        - { name: master-0, ignition: master, ip: "{{ master0ip }}" }
-        - { name: master-1, ignition: master, ip: "{{ master1ip }}" }
-        - { name: master-2, ignition: master, ip: "{{ master2ip }}" }
-      when: sno == "false"
-
     - name: Define KVM VMs when SNO
-      ansible.builtin.command: virt-install --name {{ clustername }}-{{ item.name }}   \
-            --disk {{ clusters_dir }}/{{ clustername }}/{{ item.name }}.qcow2,bus=virtio,size=120 \
-            --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9-unknown --pxe --network network={{ kvmnetwork }},model=virtio \
-            --location rhcos-install/ --noautoconsole \
-            --extra-args 'nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=vda \
-            coreos.live.rootfs_url=http://{{ lbvip }}:1234/rhcos-live-rootfs.x86_64.img \
-            ip={{ item.ip }}::{{ hostgw }}:{{ hostnw }}:{{ item.name }}.{{ clustername }}.{{ basedomain }}:enp1s0:none nameserver={{ hostns }} \
-            coreos.inst.ignition_url=http://{{ lbvip }}:1234/{{ item.ignition }}.ign'
+      ansible.builtin.command: virt-install --import --name {{ clustername }}-master-0   \
+            --disk {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-master-0.qcow2,bus=virtio,size=120 \
+            --disk {{ clusters_dir }}/{{ clustername }}/rhcos-master.iso,device=cdrom \
+            --boot hd,cdrom --check path_in_use=off --noreboot --noautoconsole \
+            --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio
       register: createnodes
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: createnodes.rc == 0
+
+    - name: Starting virtual machines when SNO
+      ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
+      register: startsnovms
+      changed_when: startsnovms.rc == 0
       with_items:
-        - { name: master-0, ignition: master, ip: "{{ master0ip }}" }
-      when: sno == "true"
+        - "master-0"
+
+    - name: Wait for master to get mac address
+      ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-0 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
+      register: master_info
+      until: master_info is defined and master_info.stdout != ""
+      retries: "180"
+      delay: "1"
+      changed_when: true
+
+    - name: Wait for the master VM to get an IP address
+      ansible.builtin.shell: "virsh domifaddr {{ clustername }}-master-0 | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
+      retries: "180"
+      delay: "3"
+      until: master0ip.stdout is defined and master0ip.stdout != ""
+      register: master0ip
+      changed_when: true
+
+    - name: Create cluster network conf on dnsmasq
+      ansible.builtin.template:
+        src: "cluster-network.conf.j2"
+        dest: "{{ dnsdir }}/{{ clustername }}.conf"
+        mode: '0644'
+        selevel: s0
+        serole: object_r
+        setype: dnsmasq_etc_t
+        seuser: system_u
+      register: dnsmasq
+
+    - name: Create addnhosts file
+      ansible.builtin.template:
+        src: "dnsmasq.openshift.addnhosts.j2"
+        dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+        mode: '0644'
+      register: addnhosts
+
+    - name: Restart Network Manager when configuring dnsmasq
+      ansible.builtin.service:
+        name: NetworkManager
+        state: restarted
+      when: dnsmasq.changed
+
+    - name: Restart libvirt when configuring dnsmasq
+      ansible.builtin.service:
+        name: libvirtd
+        state: restarted
+      when: dnsmasq.changed
+
+    - name: Adding master mac on DHCP
+      community.libvirt.virt_net:
+        name: "{{ kvmnetwork }}"
+        command: modify
+        xml: "<host mac='{{ master_info.stdout_lines | first }}' ip='{{ master0ip.stdout_lines | first }}'/>"
+      register: master_info
 
     - name: Define KVM Workers
-      ansible.builtin.command: virt-install --name {{ clustername }}-worker-{{ item }} \
-               --disk {{ clusters_dir }}/{{ clustername }}/worker-{{ item }}.qcow2,bus=virtio,size=120 \
-               --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9-unknown --pxe --network network={{ kvmnetwork }},model=virtio \
-               --location rhcos-install/ --noautoconsole \
-               --extra-args 'nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=vda \
-               coreos.live.rootfs_url=http://{{ lbvip }}:1234/rhcos-live-rootfs.x86_64.img \
-               ip={{ worker_ips[item | int - 1] }}::{{ hostgw }}:{{ hostnw }}:worker-{{ item }}.{{ clustername }}.{{ basedomain }}:enp1s0:none nameserver={{ hostns }} \
-               coreos.inst.ignition_url=http://{{ lbvip }}:1234/worker.ign'
+      ansible.builtin.command: virt-install  --import --name {{ clustername }}-worker-{{ item }}   \
+            --disk {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-worker-{{ item }}.qcow2,bus=virtio,size=120 \
+            --disk {{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso,device=cdrom \
+            --boot hd,cdrom --check path_in_use=off --noautoconsole \
+            --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio \
       register: createworkers
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
@@ -376,65 +224,144 @@
       with_sequence: count={{ n_worker }}
       when: n_worker != 0
 
-    - name: Waiting for RHCOS Installation to finish on bootstrap
-      ansible.builtin.shell: "virsh list --name |  { grep -E '{{ clustername }}-master|{{ clustername }}-worker|{{ clustername }}-bootstrap' || true; }"
-      retries: 600
-      delay: 5
-      register: vms
-      until: vms.stdout == ""
-
-    - name: Starting virtual machines when SNO
-      ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
-      register: startsnovms
-      changed_when: startsnovms.rc == 0
-      with_items:
-        - "bootstrap"
-        - "master-0"
-      when: sno == "true"
-
-    - name: Starting virtual machines when 3node
-      ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
-      register: start3nodevms
-      changed_when: start3nodevms.rc == 0
-      with_items:
-        - "bootstrap"
-        - "master-0"
-        - "master-1"
-        - "master-2"
-      when: sno == "false"
-
-    - name: Starting worker nodes
-      ansible.builtin.command: "virsh start {{ clustername }}-worker-{{ item }}"
-      register: startworkervms
-      changed_when: startworkervms.rc == 0
+    - name: Wait for the worker VM's to get an IP address
+      ansible.builtin.shell: "virsh domifaddr {{ clustername }}-worker-{{ item }} | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
+      retries: "180"
+      delay: "3"
+      until: workerip.stdout is defined and workerip.stdout != ""
+      register: workerip
       with_sequence: count={{ n_worker }}
       when: n_worker != 0
+
+    - name: Get a list of all virtual machines
+      ansible.builtin.command: virsh list --all --name
+      register: vms
+      changed_when: vms.rc == 0
+
+    #  TODO: fix
+    - name: Filter VMs containing 'worker' in their names
+      ansible.builtin.set_fact:
+        worker_vms: "{{ vms.stdout_lines | select('search', 'worker') }}"
+      when: n_worker != 0
+
+    - name: Gather MAC addresses of VMs
+      ansible.builtin.command: virsh domifaddr {{ item }}
+      loop: "{{ worker_vms }}"
+      register: vm_interfaces
+      changed_when: vm_interfaces.rc == 0
+      when: n_worker != 0
+
+    # - name: Display vm_interfaces
+    #   ansible.builtin.debug:
+    #     var: vm_interfaces
+
+    - name: Extract MAC addresses from interface information
+      ansible.builtin.set_fact:
+        mac_addresses: "{{ mac_addresses | default([]) + [item.stdout | regex_findall('([\\w:]{17})')] }}"
+        worker_ips: "{{ worker_ips | default([]) + [item.stdout | regex_findall('\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}')] }}"
+      loop: "{{ vm_interfaces.results }}"
+      when: n_worker != 0
+
+    # - name: Display MAC addresses
+    #   ansible.builtin.debug:
+    #     var: mac_addresses
+
+    # - name: Display IP addresses
+    #   ansible.builtin.debug:
+    #     var: worker_ips
+
+    - name: Adding worker mac on DHCP
+      community.libvirt.virt_net:
+        name: "{{ kvmnetwork }}"
+        command: modify
+        xml: "<host mac='{{ mac_addresses[item | int - 1] | first }}' ip='{{ worker_ips[item | int - 1] | first }}'/>"
+      register: worker_info
+      with_sequence: count={{ n_worker }}
+      when: n_worker != 0
+
+    - name: Adding worker names on dhcp
+      ansible.builtin.lineinfile:
+        path: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+        line: '{{ worker_ips[item | int - 1] | first }} {{ clustername }}-worker-{{ item }}.{{ basedomain }}'
+        state: present
+      register: dhcpname
+      with_sequence: count={{ n_worker }}
+      when: n_worker != 0
+
+    - name: Restart Network Manager when configuring dnsmasq
+      ansible.builtin.service:
+        name: NetworkManager
+        state: restarted
+      when: dhcpname.changed
+
+    - name: Restart libvirt when configuring dnsmasq
+      ansible.builtin.service:
+        name: libvirtd
+        state: restarted
+      when: dhcpname.changed
+
+    - name: Add StrictHostKeyChecking option to SSH config
+      ansible.builtin.lineinfile:
+        path: "{{ lookup('env', 'HOME') }}/.ssh/config"
+        create: true
+        mode: '0600'
+        line: "StrictHostKeyChecking no"
+        state: present
+        insertafter: EOF
+        owner: "{{ ansible_facts['user_id'] }}"
+        group: "{{ ansible_facts['user_id'] }}"
+      become: false
 
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
         minutes: 20
 
-    - name: Run wait-for bootstrap-complete
-      ansible.builtin.command: "./openshift-install wait-for bootstrap-complete"
-      args:
-        chdir: "{{ clusters_dir }}/{{ clustername }}"
-      async: 3600
-      poll: 0
-      register: waitbootstrap
-      changed_when: true
+    - name: Wait for SSH to be available on the target node
+      ansible.builtin.wait_for:
+        host: "{{ worker_ips[item | int - 1] | first }}"
+        port: 22
+        timeout: 3600
+        state: started
+        sleep: 10
+      with_sequence: count={{ n_worker }}
 
-    - name: Check if bootstrap vm can be removed
-      ansible.builtin.async_status:
-        jid: "{{ waitbootstrap.ansible_job_id }}"
-      register: job_result
-      until: job_result.finished
-      delay: 10
-      retries: 600
+    - name: Copy worker.ign to worker nodes
+      ansible.builtin.copy:
+        src: "{{ clusters_dir }}/{{ clustername }}/worker.ign"
+        dest: "/var/home/core/worker.ign"
+      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
+      with_sequence: count={{ n_worker }}
+      remote_user: "core"
 
-    - name: Remove bootstrap VM
-      community.libvirt.virt:
-        name: "{{ clustername }}-bootstrap"
-        state: destroyed
+    - name: Excute coreos-installer on worker nodes
+      ansible.builtin.shell:
+        cmd: "coreos-installer install --ignition-file=/var/home/core/worker.ign /dev/vda"
+      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
+      with_sequence: count={{ n_worker }}
+      remote_user: "core"
+      become: true
+
+    - name: Rebooting worker nodes
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
+      with_sequence: count={{ n_worker }}
+      remote_user: "core"
+      become: true
+
+    - name: Creating CSR Approver manifests
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        state: present
+        template: "{{ item }}.yaml.j2"
+      loop:
+        - csr-approver-ns
+        - csr-approver-sa
+        - csr-approver-cr
+        - csr-approver-crb
+        - csr-approver-rb
+        - csr-approver-cronjob
+      ignore_errors: true
 
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"
@@ -453,22 +380,22 @@
       delay: 10
       retries: 600
 
-    - name: Disabling master as worker
-      kubernetes.core.k8s:
-        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
-        state: present
-        template: "scheduler.yaml.j2"
-      when: sno != "true"
+    # - name: Disabling master as worker
+    #   kubernetes.core.k8s:
+    #     kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    #     state: present
+    #     template: "scheduler.yaml.j2"
+    #   when: sno != "true"
 
-    - name: Pause cronjob ocp-csr-approver
-      kubernetes.core.k8s:
-        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
-        state: present
-        definition:
-          apiVersion: batch/v1
-          kind: CronJob
-          metadata:
-            name: "ocp-csr-approver"
-            namespace: "ocp-csr-approver"
-          spec:
-            suspend: true
+    # - name: Pause cronjob ocp-csr-approver
+    #   kubernetes.core.k8s:
+    #     kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    #     state: present
+    #     definition:
+    #       apiVersion: batch/v1
+    #       kind: CronJob
+    #       metadata:
+    #         name: "ocp-csr-approver"
+    #         namespace: "ocp-csr-approver"
+    #       spec:
+    #         suspend: true

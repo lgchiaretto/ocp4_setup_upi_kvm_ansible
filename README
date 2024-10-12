@@ -1,15 +1,38 @@
-This automation is used to create Openshift Single Node Clusters (SNO) or Openshift 3 node clusters in a KVM host running libvirt.
+This automation is used to create Openshift Single Node Clusters (SNO) a KVM host running libvirt.
 
 Prereq:
 
-# Install ansible-core
+# Install ansible-core and coreos-installer
 
-sudo dnf install -y ansible-core
+sudo dnf install -y ansible-core 
 
+#  Generate an SSH key if don't have one
+
+ssh-keygen 
+
+
+#  Edit the ansible vars and fill the parameters. 
+#  You have to configure 'sshrsa' and 'pullsecret'
+#  access https://console.redhat.com/openshift/create/local and click "Download pull secret"
+
+vim ansible-vars-kvm.yaml
 
 # Some collections are needed
 
 ansible-galaxy collection install -r requirements.yml
+
+
+#  Fedora 40
+
+vim /etc/systemd/resolved.conf
+
+[Resolve]
+DNS=127.0.0.1
+Domains="~."
+
+systemctl restart systemd-resolved
+
+resolvectl status
 
 # Run playbook
 

@@ -5,25 +5,49 @@
   become_method: ansible.builtin.sudo
 
   tasks:
-    - name: Wait for LB to get an IP address
-      community.libvirt.virt:
-        command: list_vms
-      register: allvms
+    - name: Get a list of all virtual machines
+      ansible.builtin.command: virsh list --all --name
+      register: vms
+      changed_when: vms.rc == 0
 
-    # TODO: FIX it
-    - name: Remove all vms
+    - name: Filter VMs containing 'clustername' in their names
+      ansible.builtin.set_fact:
+        allvms: "{{ vms.stdout_lines | select('search', clustername) }}"
+
+    - name: Destroy all vms
+      community.libvirt.virt:
+        command: destroy
+        force: true
+        name: "{{ item }}"
+      loop: "{{ allvms }}"
+      ignore_errors: true
+
+    - name: Undefine all vms
       community.libvirt.virt:
         command: undefine
         force: true
         name: "{{ item }}"
-      loop: "{{ allvms.list_vms }}"
-      when: item is search("{{ clustername }}")
+      loop: "{{ allvms }}"
+      ignore_errors: true
 
     - name: Delete all network files
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
+      register: deletefiles
       with_items:
         - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
         - "/etc/dnsmasq.{{ clustername }}.addnhosts"
         - "/{{ clusters_dir }}/{{ clustername }}/"
+
+    - name: Restart libvirt when configuring dnsmasq
+      ansible.builtin.service:
+        name: libvirtd
+        state: restarted
+      when: deletefiles.changed
+
+    - name: Restart NetworkManager when configuring dnsmasq
+      ansible.builtin.service:
+        name: NetworkManager
+        state: restarted
+      when: deletefiles.changed
