@@ -4,7 +4,7 @@ Prereq:
 
 # Install ansible-core and coreos-installer
 
-sudo dnf install -y ansible-core 
+sudo dnf install -y ansible-core python3-pip
 
 #  Generate an SSH key if don't have one
 

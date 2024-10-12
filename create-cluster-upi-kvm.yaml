@@ -30,6 +30,12 @@
         state: present
       become: true
 
+    - name: Ensure 'kubernetes' Python package is installed
+      ansible.builtin.pip:
+        name: kubernetes
+        state: present
+        executable: pip
+
     - name: Ensure libvirtd service is running
       ansible.builtin.service:
         name: libvirtd
