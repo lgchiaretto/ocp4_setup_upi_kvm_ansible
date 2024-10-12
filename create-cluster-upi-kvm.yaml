@@ -361,6 +361,7 @@
         - csr-approver-crb
         - csr-approver-rb
         - csr-approver-cronjob
+      ignore_errors: true
 
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"
