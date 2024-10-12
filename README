@@ -24,15 +24,22 @@ ansible-galaxy collection install -r requirements.yml
 
 #  Fedora 40
 
-vim /etc/systemd/resolved.conf
+# vim /etc/systemd/resolved.conf
 
-[Resolve]
-DNS=127.0.0.1
-Domains="~."
+# [Resolve]
+# DNS=127.0.0.1
+# Domains="~."
 
-systemctl restart systemd-resolved
+# systemctl restart systemd-resolved
 
-resolvectl status
+# resolvectl status
+
+
+#  RHEL 8 and 9
+
+# sudo su
+# echo -e "[main]\ndns=dnsmasq" > /etc/NetworkManager/conf.d/nm-dns.conf
+# systemctl restart NetworkManager
 
 # Run playbook
 
