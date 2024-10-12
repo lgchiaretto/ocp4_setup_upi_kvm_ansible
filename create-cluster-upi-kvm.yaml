@@ -355,6 +355,7 @@
         state: present
         template: "{{ item }}.yaml.j2"
       loop:
+        - csr-approver-ns
         - csr-approver-sa
         - csr-approver-cr
         - csr-approver-crb
