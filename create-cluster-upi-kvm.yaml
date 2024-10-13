@@ -24,6 +24,8 @@
       ansible.builtin.stat:
         path: "/etc/systemd/resolved.conf"
       register: resolvedfile
+      when:
+        - ansible_facts['distribution'] == 'Fedora'
 
     - name: Ensure the [Resolve] block is present in /etc/systemd/resolved.conf (Fedora only)
       ansible.builtin.blockinfile:
@@ -63,7 +65,6 @@
       when:
         - ansible_facts['distribution'] == 'Fedora'
         - resolved_status.state == 'started'
-        - resolvedfile.stat is defined and resolvedfile.stat.exists
       become: true
 
     - name: Restart Network Manager when configuring dnsmasq
