@@ -414,6 +414,7 @@
       delegate_to: "{{ worker_ips[item | int - 1] | first }}"
       with_sequence: count={{ n_worker }}
       remote_user: "core"
+      when: n_worker != 0
 
     - name: Excute coreos-installer on worker nodes
       ansible.builtin.shell:
@@ -422,6 +423,7 @@
       with_sequence: count={{ n_worker }}
       remote_user: "core"
       become: true
+      when: n_worker != 0
 
     - name: Rebooting worker nodes
       ansible.builtin.reboot:
@@ -430,6 +432,7 @@
       with_sequence: count={{ n_worker }}
       remote_user: "core"
       become: true
+      when: n_worker != 0
 
     - name: Creating CSR Approver manifests
       kubernetes.core.k8s:
@@ -444,6 +447,7 @@
         - csr-approver-rb
         - csr-approver-cronjob
       ignore_errors: true
+      when: n_worker != 0
 
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"
