@@ -56,17 +56,20 @@
         - resolvedfile.stat is defined and resolvedfile.stat.exists
       become: true
 
-    - name: Restart Network Manager when configuring dnsmasq
-      ansible.builtin.service:
-        name: NetworkManager
-        state: restarted
-      become: true
-
     - name: Restart systemd-resolved when configuring dnsmasq
       ansible.builtin.service:
         name: systemd-resolved
         state: restarted
-      when: resolved.changed and ansible_facts['distribution'] == 'Fedora'
+      when:
+        - ansible_facts['distribution'] == 'Fedora'
+        - resolved_status.state == 'started'
+        - resolvedfile.stat is defined and resolvedfile.stat.exists
+      become: true
+
+    - name: Restart Network Manager when configuring dnsmasq
+      ansible.builtin.service:
+        name: NetworkManager
+        state: restarted
       become: true
 
     - name: Sleeping 5 seconds to wait NetworkManager
