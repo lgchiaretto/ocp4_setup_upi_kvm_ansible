@@ -434,6 +434,7 @@
       become: true
       when: n_worker != 0
 
+    #  TODO: retry if error and not only ignore
     - name: Creating CSR Approver manifests
       kubernetes.core.k8s:
         kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
