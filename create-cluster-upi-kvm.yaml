@@ -7,6 +7,7 @@
       ansible.builtin.command: virsh list --all --name
       register: vms
       changed_when: vms.rc == 0
+      become: true
       when: destroy_if_exists == "true"
 
     - name: Filter VMs containing 'clustername' in their names
@@ -21,6 +22,7 @@
         name: "{{ item }}"
       loop: "{{ allvms }}"
       ignore_errors: true
+      become: true
       when: destroy_if_exists == "true"
 
     - name: Undefine all vms
@@ -30,6 +32,7 @@
         name: "{{ item }}"
       loop: "{{ allvms }}"
       ignore_errors: true
+      become: true
       when: destroy_if_exists == "true"
 
     - name: Delete all network files
@@ -41,6 +44,7 @@
         - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
         - "/etc/dnsmasq.{{ clustername }}.addnhosts"
         - "/{{ clusters_dir }}/{{ clustername }}/"
+      become: true
       when: destroy_if_exists == "true"
 
     - name: Configuring networkmanager to use dnsmasq
