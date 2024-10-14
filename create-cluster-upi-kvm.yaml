@@ -28,13 +28,12 @@
         - ansible_facts['distribution'] == 'Fedora'
 
     - name: Ensure the [Resolve] block is present in /etc/systemd/resolved.conf (Fedora only)
-      ansible.builtin.blockinfile:
+      ansible.builtin.copy:
         path: /etc/systemd/resolved.conf
-        block: |
+        content: |
           [Resolve]
           DNS=127.0.0.1
           Domains="~."
-        create: true
       register: resolved
       when:
         - ansible_facts['distribution'] == 'Fedora'
