@@ -12,58 +12,26 @@
       register: configdnsmasq
       become: true
 
-    - name: Check if systemd-resolved is active and running (Fedora only)
+    - name: Stop systemd-resolved service
       ansible.builtin.systemd:
         name: systemd-resolved
-        state: started
-      register: resolved_status
-      ignore_errors: true
+        state: stopped
+        enabled: false
+      become: true
       when: ansible_facts['distribution'] == 'Fedora'
 
-    - name: Check if the resolved.conf exists
-      ansible.builtin.stat:
-        path: "/etc/systemd/resolved.conf"
-      register: resolvedfile
-      when:
-        - ansible_facts['distribution'] == 'Fedora'
-
-    - name: Ensure the [Resolve] block is present in /etc/systemd/resolved.conf (Fedora only)
-      ansible.builtin.copy:
-        path: /etc/systemd/resolved.conf
-        content: |
-          [Resolve]
-          DNS=127.0.0.1
-          Domains="~."
-      register: resolved
-      when:
-        - ansible_facts['distribution'] == 'Fedora'
-        - resolved_status.state == 'started'
-        - resolvedfile.stat is defined and not resolvedfile.stat.exists
-      become: true
-
-    # - name: Ensure the [Resolve] DNS entry is present in /etc/systemd/resolved.conf (Fedora only)
-    #   ansible.builtin.blockinfile:
-    #     path: /etc/systemd/resolved.conf
-    #     block: |
-    #       DNS=127.0.0.1
-    #       Domains="~."
-    #     create: true
-    #     insertafter: '[Resolve]'
-    #   register: dhcpname
-    #   with_sequence: count={{ n_worker }}
-    #   when:
-    #     - ansible_facts['distribution'] == 'Fedora'
-    #     - resolved_status.state == 'started'
-    #     - resolvedfile.stat is defined and resolvedfile.stat.exists
-    #   become: true
-
-    - name: Restart systemd-resolved when configuring dnsmasq
-      ansible.builtin.service:
+    - name: Disable systemd-resolved from starting at boot
+      ansible.builtin.systemd:
         name: systemd-resolved
-        state: restarted
-      when:
-        - ansible_facts['distribution'] == 'Fedora'
-        - resolved_status.state == 'started'
+        enabled: false
+      become: true
+      when: ansible_facts['distribution'] == 'Fedora'
+
+    - name: Remove /etc/resolv.conf
+      ansible.builtin.file:
+        path: /etc/resolv.conf
+        state: absent
+      when: ansible_facts['distribution'] == 'Fedora'
       become: true
 
     - name: Restart Network Manager when configuring dnsmasq
