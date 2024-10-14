@@ -43,6 +43,8 @@ ssh-keygen -t rsa
 
 Before running the playbook, edit the Ansible variables file and fill in the required parameters, such as sshrsa and pullsecret. You can obtain the pull secret by accessing Red Hat OpenShift Local (https://console.redhat.com/openshift/create/local) and clicking "Download pull secret".
 
+Use the variable 'destroy_if_exists' as true if you would like to remove an existing cluster before creating a new one
+
 ```
 vim ansible-vars-kvm.yaml
 ```
