@@ -42,21 +42,21 @@
         - resolvedfile.stat is defined and not resolvedfile.stat.exists
       become: true
 
-    - name: Ensure the [Resolve] DNS entry is present in /etc/systemd/resolved.conf (Fedora only)
-      ansible.builtin.blockinfile:
-        path: /etc/systemd/resolved.conf
-        block: |
-          DNS=127.0.0.1
-          Domains="~."
-        create: true
-        insertafter: '[Resolve]'
-      register: dhcpname
-      with_sequence: count={{ n_worker }}
-      when:
-        - ansible_facts['distribution'] == 'Fedora'
-        - resolved_status.state == 'started'
-        - resolvedfile.stat is defined and resolvedfile.stat.exists
-      become: true
+    # - name: Ensure the [Resolve] DNS entry is present in /etc/systemd/resolved.conf (Fedora only)
+    #   ansible.builtin.blockinfile:
+    #     path: /etc/systemd/resolved.conf
+    #     block: |
+    #       DNS=127.0.0.1
+    #       Domains="~."
+    #     create: true
+    #     insertafter: '[Resolve]'
+    #   register: dhcpname
+    #   with_sequence: count={{ n_worker }}
+    #   when:
+    #     - ansible_facts['distribution'] == 'Fedora'
+    #     - resolved_status.state == 'started'
+    #     - resolvedfile.stat is defined and resolvedfile.stat.exists
+    #   become: true
 
     - name: Restart systemd-resolved when configuring dnsmasq
       ansible.builtin.service:
