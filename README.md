@@ -20,7 +20,7 @@ Please make sure that your environment meets these system requirements for the b
 
 ## User
 
-You must run this playbook with sudo passwordless or root user
+You must run this playbook with sudo passwordless (not root user)
 
 ## Install Ansible Core
 
