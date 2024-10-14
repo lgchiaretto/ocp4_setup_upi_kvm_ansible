@@ -3,6 +3,46 @@
   become_method: sudo
 
   tasks:
+    - name: Get a list of all virtual machines
+      ansible.builtin.command: virsh list --all --name
+      register: vms
+      changed_when: vms.rc == 0
+      when: destroy_if_exists == "true"
+
+    - name: Filter VMs containing 'clustername' in their names
+      ansible.builtin.set_fact:
+        allvms: "{{ vms.stdout_lines | select('search', clustername) }}"
+      when: destroy_if_exists == "true"
+
+    - name: Destroy all vms
+      community.libvirt.virt:
+        command: destroy
+        force: true
+        name: "{{ item }}"
+      loop: "{{ allvms }}"
+      ignore_errors: true
+      when: destroy_if_exists == "true"
+
+    - name: Undefine all vms
+      community.libvirt.virt:
+        command: undefine
+        force: true
+        name: "{{ item }}"
+      loop: "{{ allvms }}"
+      ignore_errors: true
+      when: destroy_if_exists == "true"
+
+    - name: Delete all network files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      register: deletefiles
+      with_items:
+        - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
+        - "/etc/dnsmasq.{{ clustername }}.addnhosts"
+        - "/{{ clusters_dir }}/{{ clustername }}/"
+      when: destroy_if_exists == "true"
+
     - name: Configuring networkmanager to use dnsmasq
       ansible.builtin.copy:
         dest: "/etc/NetworkManager/conf.d/nm-dns.conf"
