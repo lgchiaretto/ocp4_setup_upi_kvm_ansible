@@ -312,13 +312,6 @@
         mode: '0644'
       when: sno != "true"
 
-    - name: Create haproxy.cfg file
-      ansible.builtin.template:
-        src: haproxy.cfg-kvm.j2
-        dest: "{{ clusters_dir }}/{{ clustername }}/haproxy.cfg"
-        mode: '0644'
-      when: sno != "true"
-
     - name: Create ssh file
       ansible.builtin.copy:
         remote_src: true
@@ -483,7 +476,7 @@
 
     - name: Create addnhosts file when not SNO
       ansible.builtin.template:
-        src: "dnsmasq.openshift.addnhosts.j2"
+        src: "dnsmasq.openshift.addnhosts-bootstrap.j2"
         dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
         mode: '0644'
       register: addnhosts
@@ -493,17 +486,15 @@
       ansible.builtin.service:
         name: NetworkManager
         state: restarted
-      when: dnsmasqsno.changed
       become: true
-      when: sno != "true"
+      when: sno != "true" and dnsmasqsno.changed
 
     - name: Restart libvirt when configuring dnsmasq when not SNO
       ansible.builtin.service:
         name: libvirtd
         state: restarted
-      when: dnsmasqsno.changed
       become: true
-      when: sno != "true"
+      when: sno != "true" and dnsmasqsno.changed
 
     - name: Define KVM VMs when SNO
       ansible.builtin.command: virt-install --import --name {{ clustername }}-master-0   \
@@ -516,6 +507,15 @@
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: createnodes.rc == 0
+      when: sno == "true"
+
+    - name: Starting virtual machines when SNO
+      ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
+      register: startsnovms
+      changed_when: startsnovms.rc == 0
+      become: true
+      with_items:
+        - "master-0"
       when: sno == "true"
 
     - name: Define KVM masters on 3 node cluster
@@ -535,27 +535,6 @@
         - "master-1"
         - "master-2"
       when: sno == "false"
-
-    - name: Starting virtual machines when SNO
-      ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
-      register: startsnovms
-      changed_when: startsnovms.rc == 0
-      become: true
-      with_items:
-        - "master-0"
-      when: sno == "true"
-
-    - name: Starting virtual machines when 3-node cluster
-      ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
-      register: startsnovms
-      changed_when: startsnovms.rc == 0
-      become: true
-      with_items:
-        - "bootstrap"
-        - "master-0"
-        - "master-1"
-        - "master-2"
-      when: sno != "true"
 
     - name: Wait for master0 to get mac address
       ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-0 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
@@ -578,7 +557,7 @@
 
     - name: Wait for master2 to get mac address
       ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-2 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
-      register: master1info
+      register: master2info
       until: master2info is defined and master2info.stdout != ""
       retries: "180"
       delay: "1"
@@ -615,7 +594,7 @@
       changed_when: true
       when: sno != "true"
 
-    - name: Create cluster network conf on dnsmasq
+    - name: Create cluster network conf on dnsmasq when SNO
       ansible.builtin.template:
         src: "cluster-network.conf-sno.j2"
         dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
@@ -627,6 +606,19 @@
       register: dnsmasq
       become: true
       when: sno == "true"
+
+    - name: Create cluster network conf on dnsmasq when not SNO
+      ansible.builtin.template:
+        src: "cluster-network.conf-sno.j2"
+        dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
+        mode: '0644'
+        selevel: s0
+        serole: object_r
+        setype: dnsmasq_etc_t
+        seuser: system_u
+      register: dnsmasq
+      become: true
+      when: sno != "true"
 
     - name: Create addnhosts file
       ansible.builtin.template:
@@ -654,23 +646,60 @@
       community.libvirt.virt_net:
         name: "{{ kvmnetwork }}"
         command: modify
-        xml: "<host mac='{{ master0info.stdout_lines | first }}' ip='{{ master0ip.stdout_lines | first }}'/>"
+        xml: "<host mac='{{ master0info.stdout }}' ip='{{ master0ip.stdout_lines | first }}'/>"
       register: master0info
       become: true
       when: sno == "true"
 
-    - name: Adding lb and masters mac on DHCP when 3-node
-      community.libvirt.virt_net:
-        name: "{{ kvmnetwork }}"
-        command: modify
-        xml: "<host mac='{{ item.mac }}' ip='{{ item.ip }}'/>"
-      register: master0info
+    # - name: Adding lb and masters mac on DHCP when 3-node
+    #   community.libvirt.virt_net:
+    #     name: "{{ kvmnetwork }}"
+    #     command: modify
+    #     xml: "<host mac='{{ item.mac }}' ip='{{ item.ip }}'/>"
+    #   register: master0info
+    #   become: true
+    #   with_items:
+    #     - { mac: "{{ lb_info.stdout }}", ip: "{{ lbvip.stdout_lines | first }}" }
+    #     - { mac: "{{ master0info.stdout }}", ip: "{{ master0ip.stdout_lines | first }}" }
+    #     - { mac: "{{ master1info.stdout }}", ip: "{{ master0ip.stdout_lines | first }}" }
+    #     - { mac: "{{ master2info.stdout }}", ip: "{{ master0ip.stdout_lines | first }}" }
+    #   when: sno != "true"
+
+    - name: Copy haproxy.cfg to lb
+      ansible.builtin.template:
+        src: "haproxy.cfg-kvm.j2"
+        dest: "/etc/haproxy/haproxy.cfg"
+        mode: "0644"
+      delegate_to: "{{ lbvip.stdout_lines | first }}"
+      remote_user: "root"
+      when: sno != "true"
+
+    - name: Restart haproxy on LB
+      ansible.builtin.systemd:
+        name: haproxy
+        state: restarted
+        enabled: false
+      delegate_to: "{{ lbvip.stdout_lines | first }}"
+      remote_user: "root"
+      when: sno != "true"
+
+    - name: Waiting for RHCOS Installation to finish on bootstrap
+      ansible.builtin.shell: "virsh list --name |  { grep -E '{{ clustername }}-master|{{ clustername }}-worker|{{ clustername }}-bootstrap' || true; }"
+      retries: 600
+      delay: 5
+      register: vms
+      until: vms.stdout == ""
+
+    - name: Starting virtual machines when 3-node cluster
+      ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
+      register: startsnovms
+      changed_when: startsnovms.rc == 0
       become: true
       with_items:
-        - { mac: "{{ lb_info.stdout_lines | first }}", ip: "{{ lb_vip.stdout_lines | first }}" }
-        - { mac: "{{ master0info.stdout_lines | first }}", ip: "{{ master0ip.stdout_lines | first }}" }
-        - { mac: "{{ master1info.stdout_lines | first }}", ip: "{{ master0ip.stdout_lines | first }}" }
-        - { mac: "{{ master2info.stdout_lines | first }}", ip: "{{ master0ip.stdout_lines | first }}" }
+        - "bootstrap"
+        - "master-0"
+        - "master-1"
+        - "master-2"
       when: sno != "true"
 
     - name: Define KVM Workers
@@ -783,6 +812,7 @@
         state: started
         sleep: 10
       with_sequence: count={{ n_worker }}
+      when: n_worker != 0
 
     - name: Copy worker.ign to worker nodes
       ansible.builtin.copy:
@@ -794,7 +824,7 @@
       remote_user: "core"
       when: n_worker != 0
 
-    - name: Excute coreos-installer on worker nodes
+    - name: Execute coreos-installer on worker nodes
       ansible.builtin.shell:
         cmd: "coreos-installer install --ignition-file=/var/home/core/worker.ign /dev/vda"
       delegate_to: "{{ worker_ips[item | int - 1] | first }}"
@@ -827,6 +857,31 @@
         - csr-approver-cronjob
       ignore_errors: true
       when: n_worker != 0
+
+    - name: Run wait-for bootstrap-complete
+      ansible.builtin.command: "./openshift-install wait-for bootstrap-complete"
+      args:
+        chdir: "{{ clusters_dir }}/{{ clustername }}"
+      async: 3600
+      poll: 0
+      register: waitbootstrap
+      changed_when: true
+      when: sno != "true"
+
+    - name: Check if bootstrap vm can be removed
+      ansible.builtin.async_status:
+        jid: "{{ waitbootstrap.ansible_job_id }}"
+      register: job_result
+      until: job_result.finished
+      delay: 10
+      retries: 600
+      when: sno != "true"
+
+    - name: Remove bootstrap VM
+      community.libvirt.virt:
+        name: "{{ clustername }}-bootstrap"
+        state: destroyed
+      when: sno != "true"
 
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"

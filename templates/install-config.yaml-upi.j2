@@ -11,7 +11,11 @@ controlPlane:
   architecture: amd64
   hyperthreading: Enabled
   name: master
+{%- if sno == "true" +%}
   replicas: 1
+{%- else +%}
+  replicas: 3
+{%- endif +%}
 metadata:
   creationTimestamp: null
   name: "{{ clustername }}"

@@ -33,12 +33,12 @@ listen stats
     stats uri  /
 
 # 6443 points to control plan
-frontend {{  clustername }}-api 
+frontend {{ clustername }}-api 
   bind *:6443
-  default_backend {{  clustername }}-master-api
-backend {{  clustername }}-master-api
+  default_backend {{ clustername }}-master-api
+backend {{ clustername }}-master-api
   balance source  
-  server bootstrap bootstrap.{{ basedomain }}:6443 check
+  server bootstrap {{ clustername }}-bootstrap.{{ basedomain }}:6443 check
   server master-0 {{ clustername }}-master-0.{{ basedomain }}:6443 check
   server master-1 {{ clustername }}-master-1.{{ basedomain }}:6443 check
   server master-2 {{ clustername }}-master-2.{{ basedomain }}:6443 check
@@ -47,33 +47,33 @@ backend {{  clustername }}-master-api
 frontend {{  clustername }}-mapi 
   bind *:22623
   mode tcp
-  default_backend {{  clustername }}-master-mapi
-backend {{  clustername }}-master-mapi
+  default_backend {{ clustername }}-master-mapi
+backend {{ clustername }}-master-mapi
   balance source
-    server bootstrap bootstrap.{{ basedomain }}:22623 check
+    server bootstrap {{ clustername }}-bootstrap.{{ basedomain }}:22623 check
     server master-0 {{ clustername }}-master-0.{{ basedomain }}:22623 check
-    server master-1 {{ clustername }}-master-1.{{ basedomain }}22623 check
+    server master-1 {{ clustername }}-master-1.{{ basedomain }}:22623 check
     server master-2 {{ clustername }}-master-2.{{ basedomain }}:22623 check
 
 # 80 points to master nodes
 frontend {{  clustername }}-http 
   bind *:80
-  default_backend {{  clustername }}-ingress-http
-backend {{  clustername }}-ingress-http
+  default_backend {{ clustername }}-ingress-http
+backend {{ clustername }}-ingress-http
   balance source
   server master-0 {{ clustername }}-master-0.{{ basedomain }}:80 check
   server master-1 {{ clustername }}-master-1.{{ basedomain }}:80 check
   server master-2 {{ clustername }}-master-2.{{ basedomain }}:80 check
 
 # 443 points to master nodes
-frontend {{  clustername }}-https
+frontend {{ clustername }}-https
   bind *:443
-  default_backend {{  clustername }}-infra-https
+  default_backend {{ clustername }}-infra-https
   option httplog
   option http-server-close
   option forwardfor
 
-backend {{  clustername }}-infra-https
+backend {{ clustername }}-infra-https
   balance source
   server master-0 {{ clustername }}-master-0.{{ basedomain }}:443 check
   server master-1 {{ clustername }}-master-1.{{ basedomain }}:443 check
