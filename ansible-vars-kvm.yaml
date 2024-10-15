@@ -2,7 +2,7 @@ clustername: wonky-moe
 basedomain: chiaret.to
 ocpversion: 4.16.16
 clusters_dir: "/labs"
-sno: 'false'
+sno: 'true'
 destroy_if_exists: 'true'
 kvmnetwork: default
 worker_mem: '4096'

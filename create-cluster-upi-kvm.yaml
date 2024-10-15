@@ -481,6 +481,7 @@
         mode: '0644'
       register: addnhosts
       become: true
+      when: sno != "true"
 
     - name: Restart Network Manager when configuring dnsmasq when not SNO
       ansible.builtin.service:
@@ -620,13 +621,23 @@
       become: true
       when: sno != "true"
 
-    - name: Create addnhosts file
+    - name: Create addnhosts file when not SNO
       ansible.builtin.template:
         src: "dnsmasq.openshift.addnhosts.j2"
         dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
         mode: '0644'
       register: addnhosts
       become: true
+      when: sno != "true"
+
+    - name: Create addnhosts file when SNO
+      ansible.builtin.template:
+        src: "dnsmasq.openshift.addnhosts-sno.j2"
+        dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+        mode: '0644'
+      register: addnhosts
+      become: true
+      when: sno == "true"
 
     - name: Restart Network Manager when configuring dnsmasq
       ansible.builtin.service:
@@ -689,6 +700,7 @@
       delay: 5
       register: vms
       until: vms.stdout == ""
+      when: sno != "true"
 
     - name: Starting virtual machines when 3-node cluster
       ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
@@ -881,6 +893,13 @@
       community.libvirt.virt:
         name: "{{ clustername }}-bootstrap"
         state: destroyed
+      when: sno != "true"
+
+    - name: Undefine bootstrap VM
+      community.libvirt.virt:
+        name: "{{ clustername }}-bootstrap"
+        command: undefine
+        force: true
       when: sno != "true"
 
     - name: Run wait-for install-complete
