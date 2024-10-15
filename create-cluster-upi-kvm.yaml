@@ -537,7 +537,17 @@
         - "master-2"
       when: sno == "false"
 
-    - name: Wait for master0 to get mac address
+    - name: Wait for master0 to get mac address when SNO
+      ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-0 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
+      register: master0infosno
+      until: master0infosno is defined and master0infosno.stdout != ""
+      retries: "180"
+      delay: "1"
+      become: true
+      changed_when: true
+      when: sno == "true"
+
+    - name: Wait for master0 to get mac address when not SNO
       ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-0 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
       register: master0info
       until: master0info is defined and master0info.stdout != ""
@@ -545,6 +555,8 @@
       delay: "1"
       become: true
       changed_when: true
+      when: sno != "true"
+
 
     - name: Wait for master1 to get mac address
       ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-1 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
@@ -653,28 +665,45 @@
       when: dnsmasq.changed
       become: true
 
-    - name: Adding master mac on DHCP
+    - name: Adding master mac on DHCP when SNO
       community.libvirt.virt_net:
         name: "{{ kvmnetwork }}"
         command: modify
-        xml: "<host mac='{{ master0info.stdout }}' ip='{{ master0ip.stdout_lines | first }}'/>"
-      register: master0info
+        xml: "<host mac='{{ master0infosno.stdout }}' ip='{{ master0ip.stdout_lines | first }}'/>"
+      register: master0infosno
       become: true
       when: sno == "true"
 
-    # - name: Adding lb and masters mac on DHCP when 3-node
-    #   community.libvirt.virt_net:
-    #     name: "{{ kvmnetwork }}"
-    #     command: modify
-    #     xml: "<host mac='{{ item.mac }}' ip='{{ item.ip }}'/>"
-    #   register: master0info
-    #   become: true
-    #   with_items:
-    #     - { mac: "{{ lb_info.stdout }}", ip: "{{ lbvip.stdout_lines | first }}" }
-    #     - { mac: "{{ master0info.stdout }}", ip: "{{ master0ip.stdout_lines | first }}" }
-    #     - { mac: "{{ master1info.stdout }}", ip: "{{ master0ip.stdout_lines | first }}" }
-    #     - { mac: "{{ master2info.stdout }}", ip: "{{ master0ip.stdout_lines | first }}" }
-    #   when: sno != "true"
+    # - name: Debug lb
+    #   debug:
+    #     var: lb_info
+
+    # - name: Debug master0info
+    #   debug:
+    #     var: master0info
+
+    # - name: Debug master1info
+    #   debug:
+    #     var: master1info
+
+    # - name: Debug master2info
+    #   debug:
+    #     var: master2info
+
+    - name: Adding lb and masters mac on DHCP when 3-node
+      community.libvirt.virt_net:
+        name: "{{ kvmnetwork }}"
+        command: modify
+        xml: "<host mac='{{ item.mac }}' ip='{{ item.ip }}'/>"
+      register: allmacsinfo
+      become: true
+      with_items:
+        - { mac: "{{ lb_info.stdout }}", ip: "{{ lbvip.stdout_lines | first }}" }
+        - { mac: "{{ master0info.stdout }}", ip: "{{ master0ip.stdout_lines | first }}" }
+        - { mac: "{{ master1info.stdout }}", ip: "{{ master1ip.stdout_lines | first }}" }
+        - { mac: "{{ master2info.stdout }}", ip: "{{ master2ip.stdout_lines | first }}" }
+      when: sno != "true"
+      ignore_errors: true
 
     - name: Copy haproxy.cfg to lb
       ansible.builtin.template:
@@ -791,14 +820,12 @@
       ansible.builtin.service:
         name: NetworkManager
         state: restarted
-      when: dhcpname.changed
       become: true
 
     - name: Restart libvirt when configuring dnsmasq
       ansible.builtin.service:
         name: libvirtd
         state: restarted
-      when: dhcpname.changed
       become: true
 
     - name: Add StrictHostKeyChecking option to SSH config

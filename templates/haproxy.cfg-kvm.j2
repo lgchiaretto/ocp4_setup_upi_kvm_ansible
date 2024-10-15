@@ -38,10 +38,10 @@ frontend {{ clustername }}-api
   default_backend {{ clustername }}-master-api
 backend {{ clustername }}-master-api
   balance source  
-  server bootstrap {{ clustername }}-bootstrap.{{ basedomain }}:6443 check
-  server master-0 {{ clustername }}-master-0.{{ basedomain }}:6443 check
-  server master-1 {{ clustername }}-master-1.{{ basedomain }}:6443 check
-  server master-2 {{ clustername }}-master-2.{{ basedomain }}:6443 check
+  server bootstrap {{ bootstrapip.stdout_lines | first }}:6443 check
+  server master-0 {{ master0ip.stdout_lines | first }}:6443 check
+  server master-1 {{ master1ip.stdout_lines | first }}:6443 check
+  server master-2 {{ master2ip.stdout_lines | first }}:6443 check
 
 # 22623 points to control plane
 frontend {{  clustername }}-mapi 
@@ -50,10 +50,10 @@ frontend {{  clustername }}-mapi
   default_backend {{ clustername }}-master-mapi
 backend {{ clustername }}-master-mapi
   balance source
-    server bootstrap {{ clustername }}-bootstrap.{{ basedomain }}:22623 check
-    server master-0 {{ clustername }}-master-0.{{ basedomain }}:22623 check
-    server master-1 {{ clustername }}-master-1.{{ basedomain }}:22623 check
-    server master-2 {{ clustername }}-master-2.{{ basedomain }}:22623 check
+    server bootstrap {{ bootstrapip.stdout_lines | first }}:22623 check
+    server master-0 {{ master0ip.stdout_lines | first }}:22623 check
+    server master-1 {{ master1ip.stdout_lines | first }}:22623 check
+    server master-2 {{ master2ip.stdout_lines | first }}:22623 check
 
 # 80 points to master nodes
 frontend {{  clustername }}-http 
@@ -61,9 +61,9 @@ frontend {{  clustername }}-http
   default_backend {{ clustername }}-ingress-http
 backend {{ clustername }}-ingress-http
   balance source
-  server master-0 {{ clustername }}-master-0.{{ basedomain }}:80 check
-  server master-1 {{ clustername }}-master-1.{{ basedomain }}:80 check
-  server master-2 {{ clustername }}-master-2.{{ basedomain }}:80 check
+  server master-0 {{ master0ip.stdout_lines | first }}:80 check
+  server master-1 {{ master1ip.stdout_lines | first }}:80 check
+  server master-2 {{ master2ip.stdout_lines | first }}:80 check
 
 # 443 points to master nodes
 frontend {{ clustername }}-https
@@ -75,6 +75,6 @@ frontend {{ clustername }}-https
 
 backend {{ clustername }}-infra-https
   balance source
-  server master-0 {{ clustername }}-master-0.{{ basedomain }}:443 check
-  server master-1 {{ clustername }}-master-1.{{ basedomain }}:443 check
-  server master-2 {{ clustername }}-master-2.{{ basedomain }}:443 check
+  server master-0 {{ master0ip.stdout_lines | first }}:443 check
+  server master-1 {{ master1ip.stdout_lines | first }}443 check
+  server master-2 {{ master2ip.stdout_lines | first }}:443 check
