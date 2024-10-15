@@ -3,6 +3,7 @@ basedomain: chiaret.to
 ocpversion: 4.16.16
 clusters_dir: "/labs"
 sno: 'false'
+destroy_if_exists: 'true'
 kvmnetwork: default
 worker_mem: '4096'
 worker_cpu: '4'

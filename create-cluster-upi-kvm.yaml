@@ -6,74 +6,92 @@
     mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
 
   tasks:
+    - name: Check if ocp version is valid
+      ansible.builtin.uri:
+        url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ ocpversion }}/openshift-client-linux.tar.gz"
+        method: HEAD
+        status_code: 200
+      register: result
+      ignore_errors: true
+
+    - name: Fail if ocpversion is not valid
+      ansible.builtin.fail:
+        msg: "The 'ocpversion' variable is not a valid version!"
+      when: result.status != 200
+
+    - name: Get a list of all virtual machines
+      ansible.builtin.command: virsh list --all --name
+      register: vms
+      changed_when: vms.rc == 0
+      become: true
+      when: destroy_if_exists == "true"
+
+    - name: Filter VMs containing 'clustername' in their names
+      ansible.builtin.set_fact:
+        allvms: "{{ vms.stdout_lines | select('search', clustername) }}"
+      when: destroy_if_exists == "true"
+
+    - name: Destroy all vms
+      community.libvirt.virt:
+        command: destroy
+        force: true
+        name: "{{ item }}"
+      loop: "{{ allvms }}"
+      ignore_errors: true
+      become: true
+      when: destroy_if_exists == "true"
+
+    - name: Undefine all vms
+      community.libvirt.virt:
+        command: undefine
+        force: true
+        name: "{{ item }}"
+      loop: "{{ allvms }}"
+      ignore_errors: true
+      become: true
+      when: destroy_if_exists == "true"
+
+    - name: Delete all network files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      register: deletefiles
+      with_items:
+        - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
+        - "/etc/dnsmasq.{{ clustername }}.addnhosts"
+        - "/{{ clusters_dir }}/{{ clustername }}/"
+      become: true
+      when: destroy_if_exists == "true"
+
     - name: Configuring networkmanager to use dnsmasq
       ansible.builtin.copy:
         dest: "/etc/NetworkManager/conf.d/nm-dns.conf"
         content: |
           [main]
           dns=dnsmasq
-        owner: root
-        group: root
-        mode: '0644'
       register: configdnsmasq
       become: true
 
-    - name: Check if systemd-resolved is active and running (Fedora only)
+    - name: Stop systemd-resolved service
       ansible.builtin.systemd:
         name: systemd-resolved
-        state: started
-      register: resolved_status
-      ignore_errors: true
+        state: stopped
+        enabled: false
+      become: true
       when: ansible_facts['distribution'] == 'Fedora'
 
-    - name: Check if the resolved.conf exists
-      ansible.builtin.stat:
-        path: "/etc/systemd/resolved.conf"
-      register: resolvedfile
-      when:
-        - ansible_facts['distribution'] == 'Fedora'
-
-    - name: Ensure the [Resolve] block is present in /etc/systemd/resolved.conf (Fedora only)
-      ansible.builtin.blockinfile:
-        path: /etc/systemd/resolved.conf
-        block: |
-          [Resolve]
-          DNS=127.0.0.1
-          Domains="~."
-        create: true
-        owner: root
-        group: root
-        mode: '0644'
-      register: resolved
-      when:
-        - ansible_facts['distribution'] == 'Fedora'
-        - resolved_status.state == 'started'
-        - resolvedfile.stat is defined and not resolvedfile.stat.exists
-      become: true
-
-    # - name: Ensure the [Resolve] DNS entry is present in /etc/systemd/resolved.conf (Fedora only)
-    #   ansible.builtin.blockinfile:
-    #     path: /etc/systemd/resolved.conf
-    #     block: |
-    #       DNS=127.0.0.1
-    #       Domains="~."
-    #     create: true
-    #     insertafter: '[Resolve]'
-    #   register: dhcpname
-    #   with_sequence: count={{ n_worker }}
-    #   when:
-    #     - ansible_facts['distribution'] == 'Fedora'
-    #     - resolved_status.state == 'started'
-    #     - resolvedfile.stat is defined and resolvedfile.stat.exists
-    #   become: true
-
-    - name: Restart systemd-resolved when configuring dnsmasq
-      ansible.builtin.service:
+    - name: Disable systemd-resolved from starting at boot
+      ansible.builtin.systemd:
         name: systemd-resolved
-        state: restarted
-      when:
-        - ansible_facts['distribution'] == 'Fedora'
-        - resolved_status.state == 'started'
+        enabled: false
+      become: true
+      when: ansible_facts['distribution'] == 'Fedora'
+
+    - name: Remove /etc/resolv.conf
+      ansible.builtin.file:
+        path: /etc/resolv.conf
+        state: absent
+      when: ansible_facts['distribution'] == 'Fedora'
       become: true
 
     - name: Restart Network Manager when configuring dnsmasq
