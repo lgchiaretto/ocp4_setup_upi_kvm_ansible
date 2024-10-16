@@ -45,9 +45,9 @@ Before running the playbook, edit the Ansible variables file and fill in the req
 
 Use the variable `destroy_if_exists = 'true'` if you would like to remove an existing cluster before creating a new one
 
-If you are create a Single Node OpenShift you must to use `sno = 'true'`
+If you are creating a Single Node OpenShift you must use `sno = 'true'`
 
-If you are creating a 3-node cluster you must to use `sno = 'false'`
+If you are creating a 3-node cluster you must use `sno = 'false'`
 
 ```
 vim ansible-vars-kvm.yaml
