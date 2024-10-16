@@ -4,7 +4,7 @@ This automation helps you create an OpenShift Single Node Cluster (SNO) or 3-nod
 
 ## ⚠️ Important Notice
 
-Please exercise caution when running this playbook, as the initial tasks modify network settings. Ensure that you fully understand the changes being made and have appropriate backups or recovery plans in place before proceeding. Running these tasks without careful review may lead to connectivity issues or unintended network configuration changes.
+Please be sure to exercise caution when running this playbook, as the initial tasks modify network settings. Ensure that you fully understand the changes being made and have appropriate backups or recovery plans in place before proceeding. Running these tasks without careful review may lead to connectivity issues or unintended network configuration changes.
 
 ## Tested Environments
 
@@ -14,9 +14,13 @@ This playbook has been successfully tested on the following distributions:
     RHEL 8
     RHEL 9
 
-Ensure that your environment meets these system requirements for the best results.
+Please make sure that your environment meets these system requirements for the best results.
 
 # Prerequisites
+
+## User
+
+You must run this playbook with sudo passwordless ( do not use 'root' user)
 
 ## Install Ansible Core
 
@@ -38,6 +42,8 @@ ssh-keygen -t rsa
 ## Edit Ansible Variables
 
 Before running the playbook, edit the Ansible variables file and fill in the required parameters, such as sshrsa and pullsecret. You can obtain the pull secret by accessing Red Hat OpenShift Local (https://console.redhat.com/openshift/create/local) and clicking "Download pull secret".
+
+Use the variable 'destroy_if_exists' as true if you would like to remove an existing cluster before creating a new one
 
 ```
 vim ansible-vars-kvm.yaml
