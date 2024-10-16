@@ -6,10 +6,10 @@ sno: 'true'
 destroy_if_exists: 'true'
 kvmnetwork: default
 worker_mem: '4096'
-worker_cpu: '4'
-n_worker: '0'
+worker_cpu: 4
+n_worker: 0
 master_mem: '32000'
-master_cpu: '8'
+master_cpu: 8
 ssh_rsa: >-
   ssh-rsa AAAAB3NzaC1yc...
 pullsecret: >-
