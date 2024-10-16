@@ -43,9 +43,9 @@ ssh-keygen -t rsa
 
 Before running the playbook, edit the Ansible variables file and fill in the required parameters, such as sshrsa and pullsecret. You can obtain the pull secret by accessing Red Hat OpenShift Local (https://console.redhat.com/openshift/create/local) and clicking "Download pull secret".
 
-Use the variable 'destroy_if_exists' as true if you would like to remove an existing cluster before creating a new one
+Use the variable `destroy_if_exists = 'true'` if you would like to remove an existing cluster before creating a new one
 
-If you are create a Single Node Openshist you must to use `sno = 'true'`
+If you are create a Single Node OpenShift you must to use `sno = 'true'`
 
 If you are creating a 3-node cluster you must to use `sno = 'false'`
 
