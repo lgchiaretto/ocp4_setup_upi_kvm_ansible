@@ -881,7 +881,6 @@
       become: true
       when: n_worker != 0
 
-    #  TODO: retry if error and not only ignore
     - name: Creating CSR Approver manifests
       kubernetes.core.k8s:
         kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
@@ -894,7 +893,11 @@
         - csr-approver-crb
         - csr-approver-rb
         - csr-approver-cronjob
-      ignore_errors: true
+      register: result
+      until: result is succeeded
+      retries: 5
+      delay: 10
+      failed_when: result is failed or result.failed
       when: n_worker != 0
 
     - name: Run wait-for bootstrap-complete

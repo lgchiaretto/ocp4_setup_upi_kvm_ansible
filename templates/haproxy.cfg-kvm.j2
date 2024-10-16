@@ -76,5 +76,5 @@ frontend {{ clustername }}-https
 backend {{ clustername }}-infra-https
   balance source
   server master-0 {{ master0ip.stdout_lines | first }}:443 check
-  server master-1 {{ master1ip.stdout_lines | first }}443 check
+  server master-1 {{ master1ip.stdout_lines | first }}:443 check
   server master-2 {{ master2ip.stdout_lines | first }}:443 check

@@ -1,4 +1,4 @@
-clustername: wonky-moe
+clustername: singlenode
 basedomain: chiaret.to
 ocpversion: 4.16.16
 clusters_dir: "/labs"
@@ -6,10 +6,10 @@ sno: 'true'
 destroy_if_exists: 'true'
 kvmnetwork: default
 worker_mem: '4096'
-worker_cpu: '4'
-n_worker: '0'
+worker_cpu: 4
+n_worker: 0
 master_mem: '16000'
-master_cpu: '8'
+master_cpu: 8
 htpasswd_pass: "Redhat@123"
 ssh_rsa: >-
   ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDdrq8QOVo8CzPrgKPC4MXN+Vn6dWdZksAWQVUrC6jvcjuFKQgb8EiMAxS0djFJKbk14SL6BRuUwBopjkumxD6kS38VDvGNlEIcWG2sQKnAzEtGdzG4N72qu6ObNK+ralg8Gu5uZPhziyKFXpwg9kOBl1qxOiycR4acyaDt4SxSAD7BWJPEbiYUeCrcZQ+BMrVUwLPpLYBa+h0/uJmK4+U632MfYUMiudNXLcs3e3f/yi5GMli6BcGgl7wlEbgnUZQzrW0D04jNWk0/JGU506c166b6Dy6bigefUlLvjJ4I/8vZns3ZRj3YV6oPaZMY9BZ9FrB0jE+7XgVXlMY7lyXX
