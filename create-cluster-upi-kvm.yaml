@@ -674,22 +674,6 @@
       become: true
       when: sno == "true"
 
-    # - name: Debug lb
-    #   debug:
-    #     var: lb_info
-
-    # - name: Debug master0info
-    #   debug:
-    #     var: master0info
-
-    # - name: Debug master1info
-    #   debug:
-    #     var: master1info
-
-    # - name: Debug master2info
-    #   debug:
-    #     var: master2info
-
     - name: Adding lb and masters mac on DHCP when 3-node
       community.libvirt.virt_net:
         name: "{{ kvmnetwork }}"
@@ -895,7 +879,7 @@
         - csr-approver-cronjob
       register: result
       until: result is succeeded
-      retries: 5
+      retries: 60
       delay: 10
       failed_when: result is failed or result.failed
       when: n_worker != 0
@@ -932,6 +916,19 @@
         force: true
       when: sno != "true"
 
+    - name: Set the number of replicas for the 'default' ingresscontroller to 3
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        api_version: operator.openshift.io/v1
+        kind: IngressController
+        namespace: openshift-ingress-operator
+        name: default
+        state: present
+        definition:
+          spec:
+            replicas: 3
+      when: sno != "true"     
+
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"
       args:
@@ -949,15 +946,16 @@
       delay: 10
       retries: 600
 
-    # - name: Pause cronjob ocp-csr-approver
-    #   kubernetes.core.k8s:
-    #     kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
-    #     state: present
-    #     definition:
-    #       apiVersion: batch/v1
-    #       kind: CronJob
-    #       metadata:
-    #         name: "ocp-csr-approver"
-    #         namespace: "ocp-csr-approver"
-    #       spec:
-    #         suspend: true
+    - name: Pause cronjob ocp-csr-approver
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        state: present
+        definition:
+          apiVersion: batch/v1
+          kind: CronJob
+          metadata:
+            name: "ocp-csr-approver"
+            namespace: "ocp-csr-approver"
+          spec:
+            suspend: true
+      when: sno != "true"

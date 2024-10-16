@@ -1,6 +1,6 @@
 # OpenShift 4 Automated Cluster Installation (UPI on KVM) using Ansible
 
-This automation helps you create an OpenShift Single Node Cluster (SNO) on a KVM host using Libvirt.
+This automation helps you create an OpenShift Single Node Cluster (SNO) or 3-node cluster on a KVM host using Libvirt.
 
 ## ⚠️ Important Notice
 
