@@ -1,4 +1,4 @@
-kwclustername: funny-flanders
+clustername: funny-flanders
 basedomain: chiaret.to
 ocpversion: 4.16.16
 clusters_dir: "/labs"
