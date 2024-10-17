@@ -175,53 +175,53 @@
       ansible.builtin.stat:
         path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-qemu.x86_64.qcow2"
       register: rhcosfile
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Check if the initramfs file already exists on cache
       ansible.builtin.stat:
         path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/initramfs.img"
       register: initramfsfile
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Check if the rhcos-live-kernel-x86_64 file already exists on cache
       ansible.builtin.stat:
         path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/vmlinuz"
       register: kernelfile
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Check if the rhcos-live-rootfs.x86_64.img file already exists on cache
       ansible.builtin.stat:
         path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-live-rootfs.x86_64.img"
       register: rootfsfile
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Download RHCOS images
       ansible.builtin.get_url:
         url: "{{ mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-qemu.x86_64.qcow2.gz"
         dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-qemu.x86_64.qcow2.gz"
         mode: "0644"
-      when: rhcosfile.stat is defined and not rhcosfile.stat.exists and sno != "true"
+      when: rhcosfile.stat is defined and not rhcosfile.stat.exists and sno == "false"
 
     - name: Download rootfs file
       ansible.builtin.get_url:
         url: "{{ mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-rootfs.x86_64.img"
         dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-live-rootfs.x86_64.img"
         mode: "0644"
-      when: rootfsfile.stat is defined and not rootfsfile.stat.exists and sno != "true"
+      when: rootfsfile.stat is defined and not rootfsfile.stat.exists and sno == "false"
 
     - name: Download initramfs images
       ansible.builtin.get_url:
         url: "{{ mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-initramfs.x86_64.img"
         dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/initramfs.img"
         mode: "0644"
-      when: initramfsfile.stat is defined and not initramfsfile.stat.exists and sno != "true"
+      when: initramfsfile.stat is defined and not initramfsfile.stat.exists and sno == "false"
 
     - name: Download rhcos-live-kernel-x86_64 images
       ansible.builtin.get_url:
         url: "{{ mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-kernel-x86_64"
         dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/vmlinuz"
         mode: "0644"
-      when: kernelfile.stat is defined and not kernelfile.stat.exists and sno != "true"
+      when: kernelfile.stat is defined and not kernelfile.stat.exists and sno == "false"
 
     - name: Create cluster directory
       ansible.builtin.file:
@@ -237,7 +237,7 @@
         path: "{{ clusters_dir }}/{{ clustername }}/rhcos-install"
         state: "directory"
         mode: "0755"
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Copy openshift-install.tar.gz to cluster dir
       ansible.builtin.copy:
@@ -284,33 +284,33 @@
         - initramfs.img
         - rhcos-qemu.x86_64.qcow2.gz
         - rhcos-live-rootfs.x86_64.img
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Extract RHCOS image
       ansible.builtin.command: "gunzip -f -d {{ clusters_dir }}/{{ clustername }}/rhcos-install/rhcos-qemu.x86_64.qcow2.gz"
       register: extractdfile
       changed_when: extractdfile.rc == 0
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Resizing RHCOS image
       ansible.builtin.command: "qemu-img resize {{ clusters_dir }}/{{ clustername }}/rhcos-install/rhcos-qemu.x86_64.qcow2 120G"
       register: resizeqcow2
       changed_when: resizeqcow2.rc == 0
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Create treeinfo file
       ansible.builtin.template:
         src: treeinfo.j2
         dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-install/.treeinfo"
         mode: '0644'
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Create tmpws.service file
       ansible.builtin.template:
         src: tmpws.service.j2
         dest: "{{ clusters_dir }}/{{ clustername }}/tmpws.service"
         mode: '0644'
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Create ssh file
       ansible.builtin.copy:
@@ -318,7 +318,7 @@
         content: "{{ ssh_rsa }}"
         dest: "{{ clusters_dir }}/{{ clustername }}/id_rsa.pub"
         mode: '0644'
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Run create single-node-ignition-config files
       ansible.builtin.command: "./openshift-install create single-node-ignition-config"
@@ -334,7 +334,7 @@
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       register: install
       changed_when: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Add bootstrap.ign to rhcos-master.iso
       ansible.builtin.command: "coreos-installer iso ignition embed -fi bootstrap-in-place-for-live-iso.ign rhcos-master.iso"
@@ -377,7 +377,7 @@
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: customizelb.rc == 0
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Define and start LB
       ansible.builtin.command: virt-install --import --name {{ clustername }}-lb --disk "lb.qcow2" \
@@ -387,7 +387,7 @@
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: definelb.rc == 0
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Wait for lb to get mac address
       ansible.builtin.shell: "virsh dumpxml {{ clustername }}-lb | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
@@ -397,7 +397,7 @@
       delay: "1"
       become: true
       changed_when: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Wait for the lb VM to get an IP address
       ansible.builtin.shell: "virsh domifaddr {{ clustername }}-lb | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
@@ -407,7 +407,7 @@
       register: lbvip
       become: true
       changed_when: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Create virtual machines disks when SNO
       ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-master-0.qcow2 120G"
@@ -427,7 +427,7 @@
         - "master-0"
         - "master-1"
         - "master-2"
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Create worker disks
       ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-worker-{{ item | int + 1 }}.qcow2 120G"
@@ -449,7 +449,7 @@
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: bootstrapnodes.rc == 0
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Wait for the bootstrap VM to get an IP address
       ansible.builtin.shell: "virsh domifaddr {{ clustername }}-bootstrap | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
@@ -459,7 +459,7 @@
       register: bootstrapip
       become: true
       changed_when: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Create cluster network conf on dnsmasq when not SNO
       ansible.builtin.template:
@@ -472,7 +472,7 @@
         seuser: system_u
       register: dnsmasqsno
       become: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Create addnhosts file when not SNO
       ansible.builtin.template:
@@ -481,21 +481,21 @@
         mode: '0644'
       register: addnhosts
       become: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Restart Network Manager when configuring dnsmasq when not SNO
       ansible.builtin.service:
         name: NetworkManager
         state: restarted
       become: true
-      when: sno != "true" and dnsmasqsno.changed
+      when: sno == "false" and dnsmasqsno.changed
 
     - name: Restart libvirt when configuring dnsmasq when not SNO
       ansible.builtin.service:
         name: libvirtd
         state: restarted
       become: true
-      when: sno != "true" and dnsmasqsno.changed
+      when: sno == "false" and dnsmasqsno.changed
 
     - name: Define KVM VMs when SNO
       ansible.builtin.command: virt-install --import --name {{ clustername }}-master-0   \
@@ -555,7 +555,7 @@
       delay: "1"
       become: true
       changed_when: true
-      when: sno != "true"
+      when: sno == "false"
 
 
     - name: Wait for master1 to get mac address
@@ -566,7 +566,7 @@
       delay: "1"
       become: true
       changed_when: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Wait for master2 to get mac address
       ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-2 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
@@ -576,7 +576,7 @@
       delay: "1"
       become: true
       changed_when: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Wait for the master-0 VM to get an IP address
       ansible.builtin.shell: "virsh domifaddr {{ clustername }}-master-0 | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
@@ -595,7 +595,7 @@
       register: master1ip
       become: true
       changed_when: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Wait for the master-2 VM to get an IP address
       ansible.builtin.shell: "virsh domifaddr {{ clustername }}-master-2 | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
@@ -605,7 +605,7 @@
       register: master2ip
       become: true
       changed_when: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Create cluster network conf on dnsmasq when SNO
       ansible.builtin.template:
@@ -631,7 +631,7 @@
         seuser: system_u
       register: dnsmasq
       become: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Create addnhosts file when not SNO
       ansible.builtin.template:
@@ -640,7 +640,7 @@
         mode: '0644'
       register: addnhosts
       become: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Create addnhosts file when SNO
       ansible.builtin.template:
@@ -686,7 +686,7 @@
         - { mac: "{{ master0info.stdout }}", ip: "{{ master0ip.stdout_lines | first }}" }
         - { mac: "{{ master1info.stdout }}", ip: "{{ master1ip.stdout_lines | first }}" }
         - { mac: "{{ master2info.stdout }}", ip: "{{ master2ip.stdout_lines | first }}" }
-      when: sno != "true"
+      when: sno == "false"
       ignore_errors: true
 
     - name: Copy haproxy.cfg to lb
@@ -696,7 +696,7 @@
         mode: "0644"
       delegate_to: "{{ lbvip.stdout_lines | first }}"
       remote_user: "root"
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Restart haproxy on LB
       ansible.builtin.systemd:
@@ -705,7 +705,7 @@
         enabled: false
       delegate_to: "{{ lbvip.stdout_lines | first }}"
       remote_user: "root"
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Waiting for RHCOS Installation to finish on bootstrap
       ansible.builtin.shell: "virsh list --name |  { grep -E '{{ clustername }}-master|{{ clustername }}-worker|{{ clustername }}-bootstrap' || true; }"
@@ -713,7 +713,7 @@
       delay: 5
       register: vms
       until: vms.stdout == ""
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Starting virtual machines when 3-node cluster
       ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
@@ -725,7 +725,7 @@
         - "master-0"
         - "master-1"
         - "master-2"
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Define KVM Workers
       ansible.builtin.command: virt-install  --import --name {{ clustername }}-worker-{{ item }}   \
@@ -892,7 +892,7 @@
       poll: 0
       register: waitbootstrap
       changed_when: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Check if bootstrap vm can be removed
       ansible.builtin.async_status:
@@ -901,20 +901,20 @@
       until: job_result.finished
       delay: 10
       retries: 600
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Remove bootstrap VM
       community.libvirt.virt:
         name: "{{ clustername }}-bootstrap"
         state: destroyed
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Undefine bootstrap VM
       community.libvirt.virt:
         name: "{{ clustername }}-bootstrap"
         command: undefine
         force: true
-      when: sno != "true"
+      when: sno == "false"
 
     - name: Set the number of replicas for the 'default' ingresscontroller to 3
       kubernetes.core.k8s:
@@ -927,7 +927,7 @@
         definition:
           spec:
             replicas: 3
-      when: sno != "true"     
+      when: sno == "false"     
 
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"
@@ -958,4 +958,4 @@
             namespace: "ocp-csr-approver"
           spec:
             suspend: true
-      when: sno != "true"
+      when: sno == "false"
