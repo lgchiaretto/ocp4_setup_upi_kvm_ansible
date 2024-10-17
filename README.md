@@ -61,6 +61,8 @@ Some Ansible collections are required to run this playbook. Install them by runn
 ansible-galaxy collection install -r requirements.yml
 ```
 
+# Usage
+
 ## Creating the cluster
 
 Once the prerequisites are met and variables are configured, run the playbook as follows:
