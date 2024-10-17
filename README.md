@@ -61,7 +61,7 @@ Some Ansible collections are required to run this playbook. Install them by runn
 ansible-galaxy collection install -r requirements.yml
 ```
 
-# Creating the cluster
+## Creating the cluster
 
 Once the prerequisites are met and variables are configured, run the playbook as follows:
 
@@ -69,7 +69,7 @@ Once the prerequisites are met and variables are configured, run the playbook as
 ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm.yaml
 ```
 
-# Accessing the cluster
+## Accessing the cluster
 
 The access to the cluster can be using the kubeconfig file generated on '{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig'
 
