@@ -2,10 +2,15 @@
   hosts: localhost
   become_method: sudo
 
-  vars:
+  vars: 
     mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
-
+    start_time: "{{ lookup('pipe', 'date +%s') }}"
+      
   tasks:
+    - name: Collect the start time
+      set_fact:
+        start_time: "{{ lookup('pipe', 'date +%s') }}"
+
     - name: Check if ocp version is valid
       ansible.builtin.uri:
         url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ ocpversion }}/openshift-client-linux.tar.gz"
@@ -360,7 +365,7 @@
                               --firstboot-command "systemctl disable firewalld" \
                               --firstboot-command "setenforce 0" \
                               --firstboot-command "reboot" \
-                              --ssh-inject root:file:{{ clusters_dir }}/{{ clustername }}/id_rsa.pub --selinux-relabel \
+                              --ssh-inject "root:file:{{ clusters_dir }}/{{ clustername }}/id_rsa.pub" --selinux-relabel \
                               --copy-in bootstrap.ign:/opt/ --copy-in master.ign:/opt/ --copy-in worker.ign:/opt/ \
                               --copy-in tmpws.service:/etc/systemd/system/ \
                               --hostname "lb-{{ clustername }}.{{ basedomain }}" \
@@ -384,10 +389,10 @@
                               --memory 1024 --cpu host --vcpus 4 --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio \
                               --noautoconsole --autostart
       register: definelb
+      become: true
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: definelb.rc == 0
-      become: true
       when: sno == "false"
 
     - name: Wait for lb to get mac address
@@ -447,6 +452,7 @@
             coreos.live.rootfs_url=http://{{ lbvip.stdout_lines | first }}:1234/rhcos-live-rootfs.x86_64.img \
             coreos.inst.ignition_url=http://{{ lbvip.stdout_lines | first }}:1234/bootstrap.ign'
       register: bootstrapnodes
+      become: true
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: bootstrapnodes.rc == 0
@@ -529,6 +535,7 @@
             coreos.live.rootfs_url=http://{{ lbvip.stdout_lines | first }}:1234/rhcos-live-rootfs.x86_64.img \
             coreos.inst.ignition_url=http://{{ lbvip.stdout_lines | first }}:1234/master.ign'
       register: createnodes
+      become: true
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: createnodes.rc == 0
@@ -712,6 +719,7 @@
       ansible.builtin.shell: "virsh list --name |  { grep -E '{{ clustername }}-master|{{ clustername }}-worker|{{ clustername }}-bootstrap' || true; }"
       retries: 600
       delay: 5
+      become: true
       register: vms
       until: vms.stdout == ""
       when: sno == "false"
@@ -960,3 +968,21 @@
           spec:
             suspend: true
       when: sno == "false"
+        
+    - name: Collect the end time
+      set_fact:
+        end_time: "{{ lookup('pipe', 'date +%s') }}"
+      
+    - name: Calculate the script execution time
+      set_fact:
+        total_time: "{{ (end_time | int) - (start_time | int) }}"
+      
+    - name: Convert the execution time to hour, minute and seconds
+      set_fact:
+        hours: "{{ (total_time | int) // 3600 }}"
+        minutes: "{{ ((total_time | int) % 3600) // 60 }}"
+        seconds: "{{ (total_time | int) % 60 }}"
+
+    - name: Show the script execution time
+      ansible.builtin.debug:
+        msg: "The execution time is {{ hours }}h {{ minutes }}m {{ seconds }}s."
