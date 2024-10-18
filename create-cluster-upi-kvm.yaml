@@ -387,6 +387,7 @@
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: definelb.rc == 0
+      become: true
       when: sno == "false"
 
     - name: Wait for lb to get mac address
