@@ -79,4 +79,20 @@ The access to the cluster can be using the kubeconfig file generated on '{{ clus
 export KUBECONFIG='{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig'
 ```
 
+# Day 2 Operations
 
+## Add new worker nodes
+
+To add new nodes after installing the cluster you can use the playbook `add-new-nodes.yaml`
+
+Edit the variables file and configure `n_worker` value
+
+```
+vim ansible-vars-kvm.yaml
+```
+
+Execute the playbook
+
+```
+ansible-playbook -e @ansible-vars-kvm.yaml add-new-nodes.yaml
+```
