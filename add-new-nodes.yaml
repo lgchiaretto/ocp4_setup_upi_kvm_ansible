@@ -1,0 +1,272 @@
+- name: Add Openshift Nodes on UPI clusters
+  hosts: localhost
+  become_method: sudo
+
+  vars:
+    start_time: "{{ lookup('pipe', 'date +%s') }}"
+
+  tasks:
+    - name: Collect the start time
+      ansible.builtin.set_fact:
+        start_time: "{{ lookup('pipe', 'date +%s') }}"
+
+    - name: Get a list of all worker virtual machines
+      ansible.builtin.shell: "virsh list --all --name | grep worker"
+      register: allworkernodes
+      changed_when: allworkernodes.rc == 0
+      become: true
+      when: n_worker != 0
+      ignore_errors: true
+
+    - name: Counting number of worker nodes
+      ansible.builtin.set_fact:
+        workernodes: "{{ allworkernodes.stdout_lines | count | int if allworkernodes.stdout_lines is defined else 0 }}"
+      when: n_worker != 0
+
+    - name: Check if n_worker is greater than number of existing worker nodes
+      ansible.builtin.assert:
+        that:
+          - n_worker >  (workernodes | int)
+        msg: "'n_worker' must be higher than current number of worker nodes: {{ workernodes }}"
+      when: n_worker != 0
+
+    - name: Creating CSR Approver manifests
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        state: present
+        template: "{{ item }}.yaml.j2"
+      loop:
+        - csr-approver-ns
+        - csr-approver-sa
+        - csr-approver-cr
+        - csr-approver-crb
+        - csr-approver-rb
+        - csr-approver-cronjob
+      register: result
+      until: result is succeeded
+      retries: 60
+      delay: 10
+      failed_when: result is failed or result.failed
+      when: n_worker != 0 and ( workernodes | int ) == 0
+
+    - name: Unpause cronjob ocp-csr-approver when no worker exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        state: present
+        definition:
+          apiVersion: batch/v1
+          kind: CronJob
+          metadata:
+            name: "ocp-csr-approver"
+            namespace: "ocp-csr-approver"
+          spec:
+            suspend: false
+      when: n_worker != 0 and ( workernodes | int ) == 0
+
+    - name: Fetch the worker.ign file content when worker
+      ansible.builtin.slurp:
+        path: "{{ clusters_dir }}/{{ clustername }}/worker.ign"
+      register: workerign
+
+    - name: Unpause cronjob ocp-csr-approver
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        state: present
+        definition:
+          apiVersion: batch/v1
+          kind: CronJob
+          metadata:
+            name: "ocp-csr-approver"
+            namespace: "ocp-csr-approver"
+          spec:
+            suspend: false
+      when: n_worker != 0 and ( workernodes | int ) != 0
+
+    - name: Fetch the worker.ign file content when worker
+      ansible.builtin.slurp:
+        path: "{{ clusters_dir }}/{{ clustername }}/worker.ign"
+      register: workerign
+
+    - name: Define KVM Workers
+      ansible.builtin.command: virt-install  --import --name {{ clustername }}-worker-{{ item }}   \
+            --disk {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-worker-{{ item }}.qcow2,bus=virtio,size=120 \
+            --disk {{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso,device=cdrom \
+            --boot hd,cdrom --check path_in_use=off --noautoconsole \
+            --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio \
+      register: createworkers
+      args:
+        chdir: "{{ clusters_dir }}/{{ clustername }}"
+      changed_when: createworkers.rc == 0
+      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
+      when: n_worker != 0
+      become: true
+
+    - name: Wait for the worker VM's to get an IP address
+      ansible.builtin.shell: "virsh domifaddr {{ clustername }}-worker-{{ item }} | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
+      retries: "180"
+      delay: "3"
+      until: workerip.stdout is defined and workerip.stdout != ""
+      register: workerip
+      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
+      when: n_worker != 0
+      become: true
+
+    - name: Get a list of all virtual machines
+      ansible.builtin.command: virsh list --all --name
+      register: vms
+      changed_when: vms.rc == 0
+      become: true
+
+    - name: Filter VMs containing 'worker' in their names
+      ansible.builtin.set_fact:
+        worker_vms: "{{ vms.stdout_lines | select('search', 'worker') }}"
+      when: n_worker != 0
+      become: true
+
+    - name: Gather MAC addresses of VMs
+      ansible.builtin.command: virsh domifaddr {{ item }}
+      loop: "{{ worker_vms }}"
+      register: vm_interfaces
+      changed_when: vm_interfaces.rc == 0
+      when: n_worker != 0
+      become: true
+
+    - name: Extract MAC addresses from interface information
+      ansible.builtin.set_fact:
+        mac_addresses: "{{ mac_addresses | default([]) + [item.stdout | regex_findall('([\\w:]{17})')] }}"
+        worker_ips: "{{ worker_ips | default([]) + [item.stdout | regex_findall('\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}')] }}"
+      loop: "{{ vm_interfaces.results }}"
+      when: n_worker != 0
+      become: true
+
+    - name: Adding worker mac on DHCP
+      community.libvirt.virt_net:
+        name: "{{ kvmnetwork }}"
+        command: modify
+        xml: "<host mac='{{ mac_addresses[item | int - 1] | first }}' ip='{{ worker_ips[item | int - 1] | first }}'/>"
+      register: worker_info
+      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
+      when: n_worker != 0
+      become: true
+
+    - name: Adding worker names on dhcp
+      ansible.builtin.lineinfile:
+        path: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+        line: '{{ worker_ips[item | int - 1] | first }} {{ clustername }}-worker-{{ item }}.{{ basedomain }}'
+        state: present
+      register: dhcpname
+      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
+      when: n_worker != 0
+      become: true
+
+    - name: Restart Network Manager when configuring dnsmasq
+      ansible.builtin.service:
+        name: NetworkManager
+        state: restarted
+      become: true
+
+    - name: Restart libvirt when configuring dnsmasq
+      ansible.builtin.service:
+        name: libvirtd
+        state: restarted
+      become: true
+
+    - name: Sleeping 5 seconds to wait NetworkManager
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Wait for SSH to be available on the target node
+      ansible.builtin.wait_for:
+        host: "{{ worker_ips[item | int - 1] | first }}"
+        port: 22
+        timeout: 3600
+        state: started
+        sleep: 10
+      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
+      when: n_worker != 0
+
+    - name: Copy worker.ign to worker nodes
+      ansible.builtin.copy:
+        src: "{{ clusters_dir }}/{{ clustername }}/worker.ign"
+        dest: "/var/home/core/worker.ign"
+        mode: "0644"
+      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
+      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
+      remote_user: "core"
+      when: n_worker != 0
+
+    - name: Execute coreos-installer on worker nodes
+      ansible.builtin.shell:
+        cmd: "coreos-installer install --ignition-file=/var/home/core/worker.ign /dev/vda"
+      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
+      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
+      remote_user: "core"
+      become: true
+      when: n_worker != 0
+
+    - name: Rebooting worker nodes
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
+      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
+      remote_user: "core"
+      become: true
+      when: n_worker != 0
+
+    - name: Wait for SSH to be available on the target node
+      ansible.builtin.wait_for:
+        host: "{{ worker_ips[item | int - 1] | first }}"
+        port: 22
+        timeout: 3600
+        state: started
+        sleep: 10
+      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
+      when: n_worker != 0
+
+    - name: Wait for new nodes to be ready
+      kubernetes.core.k8s_info:
+        kind: Node
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        name: "{{ clustername }}-worker-{{ item }}.{{ basedomain }}"
+      register: nodes_info
+      retries: 120
+      delay: 10
+      until:
+        - nodes_info.resources[0].status is defined
+        - nodes_info.resources[0].status.conditions is defined
+        - (nodes_info.resources[0].status.conditions | selectattr('type', 'equalto', 'Ready'))
+        - (nodes_info.resources[0].status.conditions | selectattr('reason', 'equalto', 'KubeletReady'))
+      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
+      when: n_worker != 0
+
+    - name: Pause cronjob ocp-csr-approver
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        state: present
+        definition:
+          apiVersion: batch/v1
+          kind: CronJob
+          metadata:
+            name: "ocp-csr-approver"
+            namespace: "ocp-csr-approver"
+          spec:
+            suspend: true
+      when: n_worker != 0
+
+    - name: Collect the end time
+      ansible.builtin.set_fact:
+        end_time: "{{ lookup('pipe', 'date +%s') }}"
+
+    - name: Calculate the script execution time
+      ansible.builtin.set_fact:
+        total_time: "{{ (end_time | int) - (start_time | int) }}"
+
+    - name: Convert the execution time to hour, minute and seconds
+      ansible.builtin.set_fact:
+        hours: "{{ (total_time | int) // 3600 }}"
+        minutes: "{{ ((total_time | int) % 3600) // 60 }}"
+        seconds: "{{ (total_time | int) % 60 }}"
+
+    - name: Show the script execution time
+      ansible.builtin.debug:
+        msg: "The execution time is {{ hours }}h {{ minutes }}m {{ seconds }}s."

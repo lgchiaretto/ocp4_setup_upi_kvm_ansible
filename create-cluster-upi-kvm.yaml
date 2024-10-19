@@ -2,13 +2,13 @@
   hosts: localhost
   become_method: sudo
 
-  vars: 
+  vars:
     mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
     start_time: "{{ lookup('pipe', 'date +%s') }}"
-      
+
   tasks:
     - name: Collect the start time
-      set_fact:
+      ansible.builtin.set_fact:
         start_time: "{{ lookup('pipe', 'date +%s') }}"
 
     - name: Check if ocp version is valid
@@ -356,8 +356,6 @@
       register: rhcosworker
       changed_when: true
 
-# TODO: Fix ssh-insoect
-#  copy haproxy.cfg to LB
     - name: Customize LB for OpenShift nodes (could take long time)
       ansible.builtin.command: virt-builder fedora-40 --format qcow2 --cache {{ clusters_dir }}/.cache/ --size 10G -o "lb.qcow2" \
                               --firstboot-command "nmcli con mod 'Wired connection 1' connection.id enp1s0" \
@@ -836,7 +834,7 @@
       ansible.builtin.pause:
         minutes: 20
 
-    - name: Wait for SSH to be available on the target node
+    - name: Wait for SSH to be available on the worker node
       ansible.builtin.wait_for:
         host: "{{ worker_ips[item | int - 1] | first }}"
         port: 22
@@ -936,7 +934,7 @@
         definition:
           spec:
             replicas: 3
-      when: sno == "false"     
+      when: sno == "false"
 
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"
@@ -955,6 +953,22 @@
       delay: 10
       retries: 600
 
+    - name: Wait for worker nodes to be ready
+      kubernetes.core.k8s_info:
+        kind: Node
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        name: "{{ clustername }}-worker-{{ item }}.{{ basedomain }}"
+      register: nodes_info
+      retries: 120
+      delay: 10
+      until:
+        - nodes_info.resources[0].status is defined
+        - nodes_info.resources[0].status.conditions is defined
+        - (nodes_info.resources[0].status.conditions | selectattr('type', 'equalto', 'Ready'))
+        - (nodes_info.resources[0].status.conditions | selectattr('reason', 'equalto', 'KubeletReady'))
+      with_sequence: start=1 end="{{ n_worker }}"
+      when: n_worker != 0
+
     - name: Pause cronjob ocp-csr-approver
       kubernetes.core.k8s:
         kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
@@ -968,17 +982,17 @@
           spec:
             suspend: true
       when: sno == "false"
-        
+
     - name: Collect the end time
-      set_fact:
+      ansible.builtin.set_fact:
         end_time: "{{ lookup('pipe', 'date +%s') }}"
-      
+
     - name: Calculate the script execution time
-      set_fact:
+      ansible.builtin.set_fact:
         total_time: "{{ (end_time | int) - (start_time | int) }}"
-      
+
     - name: Convert the execution time to hour, minute and seconds
-      set_fact:
+      ansible.builtin.set_fact:
         hours: "{{ (total_time | int) // 3600 }}"
         minutes: "{{ ((total_time | int) % 3600) // 60 }}"
         seconds: "{{ (total_time | int) % 60 }}"
