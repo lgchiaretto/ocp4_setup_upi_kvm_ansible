@@ -981,7 +981,7 @@
             namespace: "ocp-csr-approver"
           spec:
             suspend: true
-      when: sno == "false"
+      when: n_worker != 0
 
     - name: Collect the end time
       ansible.builtin.set_fact:
