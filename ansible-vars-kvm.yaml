@@ -10,6 +10,8 @@ worker_cpu: 4
 n_worker: 0
 master_mem: '32000'
 master_cpu: 8
+extra_disks: 1
+extra_disk_size: 100
 htpasswd_pass: 'Redhat@123'
 ssh_rsa: >-
   ssh-rsa AAAAB3Nza...
