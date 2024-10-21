@@ -966,7 +966,7 @@
         - nodes_info.resources[0].status.conditions is defined
         - (nodes_info.resources[0].status.conditions | selectattr('type', 'equalto', 'Ready'))
         - (nodes_info.resources[0].status.conditions | selectattr('reason', 'equalto', 'KubeletReady'))
-      with_sequence: start=1 end="{{ n_worker }}"
+      with_sequence: start=1 end="{{ n_worker | int + 1 }}"
       when: n_worker != 0
 
     - name: Pause cronjob ocp-csr-approver
