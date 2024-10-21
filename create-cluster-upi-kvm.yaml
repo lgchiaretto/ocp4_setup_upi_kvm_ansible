@@ -414,11 +414,21 @@
       when: sno == "false"
 
     - name: Create virtual machines disks when SNO
-      ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-master-0.qcow2 120G"
-      args:
-        chdir: "{{ clusters_dir }}/{{ clustername }}"
-      register: qcow2master
-      changed_when: true
+      block:
+        - name: Create primary disk
+          ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-master-0.qcow2 120G"
+          args:
+            chdir: "{{ clusters_dir }}/{{ clustername }}"
+          register: qcow2master
+          changed_when: true
+        - name: Create extra disks
+          ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-extra-disk-{{ item }}.qcow2 {{ extra_disk_size }}G"
+          args:
+            chdir: "{{ clusters_dir }}/{{ clustername }}"
+          loop: "{{ range(1, extra_disks + 1) }}"
+          when: extra_disks > 0
+          register: extra_disks_result
+          changed_when: true
       when: sno == "true"
 
     - name: Create virtual machines disks when 3 node cluster
@@ -506,6 +516,9 @@
       ansible.builtin.command: virt-install --import --name {{ clustername }}-master-0   \
             --disk {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-master-0.qcow2,bus=virtio,size=120 \
             --disk {{ clusters_dir }}/{{ clustername }}/rhcos-master.iso,device=cdrom \
+            {% for i in range(1, extra_disks + 1) %}
+            --disk {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-extra-disk-{{ i }}.qcow2,bus=virtio,size={{ extra_disk_size }} \
+            {% endfor %}
             --boot hd,cdrom --check path_in_use=off --noreboot --noautoconsole \
             --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio
       register: createnodes
@@ -966,7 +979,7 @@
         - nodes_info.resources[0].status.conditions is defined
         - (nodes_info.resources[0].status.conditions | selectattr('type', 'equalto', 'Ready'))
         - (nodes_info.resources[0].status.conditions | selectattr('reason', 'equalto', 'KubeletReady'))
-      with_sequence: start=1 end="{{ n_worker }}"
+      with_sequence: start=1 end="{{ n_worker | int + 1 }}"
       when: n_worker != 0
 
     - name: Pause cronjob ocp-csr-approver
