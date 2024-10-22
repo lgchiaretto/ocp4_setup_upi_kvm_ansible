@@ -24,7 +24,7 @@ defaults
   maxconn 3000                                                                            
 
 listen stats 
-    bind {{ external_kvm_ip }}:1936
+    bind {{ external_kvm_node_ip }}:1936
     mode http
     stats enable
     stats hide-version
@@ -34,27 +34,27 @@ listen stats
 
 # 6443 points to control plan
 frontend api 
-  bind {{ external_kvm_ip }}:6443
+  bind {{ external_kvm_node_ip }}:6443
   default_backend master-api
 backend master-api
   balance source
-  server master-0 {{ external_kvm_master0_ip }}:6443 check
+  server master-0 {{ external_kvm_ocp_api_ip }}:6443 check
 
 # 80 points to master nodes
 frontend http 
-  bind {{ external_kvm_ip }}:80
+  bind {{ external_kvm_node_ip }}:80
   default_backend ingress-http
 backend ingress-http
   balance source
-  server master-0 {{ external_kvm_master0_ip }}:80 check
+  server master-0 {{ external_kvm_ocp_api_ip }}:80 check
 
 # 443 points to master nodes
 frontend https
-  bind {{ external_kvm_ip }}:443
+  bind {{ external_kvm_node_ip }}:443
   default_backend infra-https
   option httplog
   option http-server-close
   option forwardfor
 backend infra-https
   balance source
-  server master-0 {{ external_kvm_master0_ip }}:443 check
+  server master-0 {{ external_kvm_ocp_api_ip }}:443 check
