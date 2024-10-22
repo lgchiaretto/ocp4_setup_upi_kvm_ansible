@@ -1,0 +1,157 @@
+- name: Configure access to an OCP cluster in an external KVM
+  hosts: localhost
+  gather_facts: true
+  become: true
+  become_method: ansible.builtin.sudo
+
+  vars:
+    start_time: "{{ lookup('pipe', 'date +%s') }}"
+    external_kvm_ip: 192.168.86.125
+    external_kvm_master0_ip: 192.168.124.167
+    external_kvm_user: lchiaret
+
+  tasks:
+    - name: Collect the start time
+      ansible.builtin.set_fact:
+        start_time: "{{ lookup('pipe', 'date +%s') }}"
+
+    - name: Configuring networkmanager to use dnsmasq
+      ansible.builtin.copy:
+        dest: "/etc/NetworkManager/conf.d/nm-dns.conf"
+        content: |
+          [main]
+          dns=dnsmasq
+      register: configdnsmasq
+      become: true
+
+    - name: Create cluster network conf on dnsmasq when not SNO
+      ansible.builtin.template:
+        src: "cluster-network.conf-external-kvm.j2"
+        dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
+        mode: '0644'
+        selevel: s0
+        serole: object_r
+        setype: dnsmasq_etc_t
+        seuser: system_u
+      register: dnsmasqsno
+      become: true
+
+    - name: Create addnhosts file when SNO
+      ansible.builtin.template:
+        src: "dnsmasq.openshift.addnhosts-external-kvm.j2"
+        dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+        mode: '0644'
+      register: addnhosts
+      become: true
+
+    - name: Stop systemd-resolved service
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        state: stopped
+        enabled: false
+      become: true
+      when: ansible_facts['distribution'] == 'Fedora'
+
+    - name: Disable systemd-resolved from starting at boot
+      ansible.builtin.systemd:
+        name: systemd-resolved
+        enabled: false
+      become: true
+      when: ansible_facts['distribution'] == 'Fedora'
+
+    - name: Remove /etc/resolv.conf
+      ansible.builtin.file:
+        path: /etc/resolv.conf
+        state: absent
+      when: ansible_facts['distribution'] == 'Fedora'
+      become: true
+
+    - name: Restart Network Manager when configuring dnsmasq
+      ansible.builtin.service:
+        name: NetworkManager
+        state: restarted
+      become: true
+
+    - name: Sleeping 5 seconds to wait NetworkManager
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: Ensure haproxy package is installed
+      ansible.builtin.dnf:
+        name: haproxy
+        state: present
+      become: true
+      remote_user: "{{ external_kvm_user }}"
+      delegate_to: "{{ external_kvm_ip }}"
+
+    - name: Copy haproxy.cfg
+      ansible.builtin.template:
+        src: haproxy.cfg-podman.j2
+        dest: "/etc/haproxy/haproxy.cfg"
+        mode: '0644'
+      become: true
+      remote_user: "{{ external_kvm_user }}"
+      delegate_to: "{{ external_kvm_ip }}"
+
+    - name: Allow selinux on haproxy ports
+      community.general.seport:
+        ports:
+          - 80
+          - 443
+          - 1936
+          - 6443
+        proto: tcp
+        setype: http_port_t
+        state: present
+      become: true
+      remote_user: "{{ external_kvm_user }}"
+      delegate_to: "{{ external_kvm_ip }}"
+
+    - name: Open port hapropxy ports in firewalld
+      ansible.posix.firewalld:
+        port: "{{ item  }}/tcp"
+        permanent: true
+        state: enabled
+        immediate: true
+      with_items:
+        - 80
+        - 443
+        - 1936
+        - 6443
+      become: true
+      remote_user: "{{ external_kvm_user }}"
+      delegate_to: "{{ external_kvm_ip }}"
+
+    # - name: Reload firewalld to apply changes
+    #   ansible.posix.firewalld:
+    #     state: reloaded
+    #     immediate: true
+    #   become: true
+    #   remote_user: "{{ external_kvm_user }}"
+    #   delegate_to: "{{ external_kvm_ip }}"
+
+    - name: Restart haproxy on LB
+      ansible.builtin.systemd:
+        name: haproxy
+        state: restarted
+      become: true
+      remote_user: "{{ external_kvm_user }}"
+      delegate_to: "{{ external_kvm_ip }}"
+
+    - name: Collect the end time
+      ansible.builtin.set_fact:
+        end_time: "{{ lookup('pipe', 'date +%s') }}"
+
+    - name: Calculate the script execution time
+      ansible.builtin.set_fact:
+        total_time: "{{ (end_time | int) - (start_time | int) }}"
+
+    - name: Convert the execution time to hour, minute and seconds
+      ansible.builtin.set_fact:
+        hours: "{{ (total_time | int) // 3600 }}"
+        minutes: "{{ ((total_time | int) % 3600) // 60 }}"
+        seconds: "{{ (total_time | int) % 60 }}"
+
+    - name: Show the script execution time
+      ansible.builtin.debug:
+        msg: "The execution time is {{ hours }}h {{ minutes }}m {{ seconds }}s."
