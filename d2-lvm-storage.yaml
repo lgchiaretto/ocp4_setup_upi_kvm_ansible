@@ -1,0 +1,133 @@
+---
+- name: Install LVM Storage and Configure LVMCluster
+  hosts: localhost
+  gather_facts: false
+  become: true
+
+  vars:
+    namespace_template: "templates/d2-storage-namespace.yaml.j2"
+    operatorgroup_template: "templates/d2-storage-operatorgroup.yaml.j2"
+    subscription_template: "templates/d2-storage-subscription.yaml.j2"
+    lvmcluster_template: "templates/d2-storage-lvmcluster.yaml.j2"
+    pvc_template: "templates/d2-storage-pvc.yaml.j2"
+    pod_template: "templates/d2-storage-pod.yaml.j2"
+    namespace_file: "{{ clusters_dir }}/{{ clustername }}/d2-storage-namespace.yaml"
+    operatorgroup_file: "{{ clusters_dir }}/{{ clustername }}/d2-storage-operatorgroup.yaml"
+    subscription_file: "{{ clusters_dir }}/{{ clustername }}/d2-storage-subscription.yaml"
+    lvmcluster_file: "{{ clusters_dir }}/{{ clustername }}/d2-storage-lvmcluster.yaml"
+    pvc_file: "{{ clusters_dir }}/{{ clustername }}/d2-storage-pvc.yaml"
+    pod_file: "{{ clusters_dir }}/{{ clustername }}/d2-storage-pod.yaml"
+    api_server_url: "https://api.{{ clustername }}.{{ basedomain }}:6443"
+    extra_disks: "{{ extra_disks | int }}"  # Garantir que seja sempre tratado como inteiro
+
+  tasks:
+    - name: Display the constructed API server URL
+      debug:
+        var: api_server_url
+
+    - name: Check if namespace openshift-storage exists
+      shell: oc get namespace openshift-storage --insecure-skip-tls-verify
+      register: check_namespace
+      ignore_errors: true
+
+    - name: Create the namespace template
+      template:
+        src: "{{ namespace_template }}"
+        dest: "{{ namespace_file }}"
+
+    - name: Create the namespace if it does not exist
+      shell: oc create -f {{ namespace_file }} --insecure-skip-tls-verify
+      when: check_namespace.rc != 0
+
+    - name: Check if OperatorGroup exists
+      shell: oc get operatorgroup openshift-storage-operatorgroup -n openshift-storage --insecure-skip-tls-verify
+      register: check_operatorgroup
+      ignore_errors: true
+
+    - name: Create the OperatorGroup template
+      template:
+        src: "{{ operatorgroup_template }}"
+        dest: "{{ operatorgroup_file }}"
+
+    - name: Create the OperatorGroup if it does not exist
+      shell: oc create -f {{ operatorgroup_file }} --insecure-skip-tls-verify
+      when: check_operatorgroup.rc != 0
+
+    - name: Check if Subscription exists
+      shell: oc get subscription lvms -n openshift-storage --insecure-skip-tls-verify
+      register: check_subscription
+      ignore_errors: true
+
+    - name: Create the Subscription template
+      template:
+        src: "{{ subscription_template }}"
+        dest: "{{ subscription_file }}"
+
+    - name: Create the Subscription if it does not exist
+      shell: oc create -f {{ subscription_file }} --insecure-skip-tls-verify
+      when: check_subscription.rc != 0
+
+    - name: Wait for LVM Storage operator to be installed
+      shell: oc get csv -n openshift-storage -o custom-columns=Name:.metadata.name,Phase:.status.phase
+      register: lvm_install_check
+      retries: 10
+      delay: 30
+      until: "'Succeeded' in lvm_install_check.stdout"
+
+    - name: Display LVM Storage installation status
+      debug:
+        var: lvm_install_check.stdout
+
+    - name: Generate the list of extra disks
+      set_fact:
+        extra_disks_list: "{{ ['vdb', 'vdc', 'vdd', 'vde', 'vdf', 'vdg', 'vdh', 'vdi', 'vdj', 'vdk'][:extra_disks] }}"
+
+    - name: Display the generated list of extra disks
+      debug:
+        var: extra_disks_list
+
+    - name: Create the LVMCluster template with generated extra disks
+      template:
+        src: "{{ lvmcluster_template }}"
+        dest: "{{ lvmcluster_file }}"
+
+    - name: Create the LVMCluster CR
+      shell: oc create -f {{ lvmcluster_file }} --insecure-skip-tls-verify
+      register: lvmcluster_output
+
+    - name: Display the result of LVMCluster creation
+      debug:
+        var: lvmcluster_output.stdout
+
+    - name: Wait for LVMCluster to be in Ready status
+      shell: oc get lvmclusters.lvm.topolvm.io -o jsonpath='{.items[*].status}' -n openshift-storage
+      register: lvmcluster_status
+      retries: 10
+      delay: 30
+      until: "'Ready' in lvmcluster_status.stdout"
+
+    - name: Display LVMCluster status
+      debug:
+        var: lvmcluster_status.stdout
+
+    - name: Create the PVC template
+      template:
+        src: "{{ pvc_template }}"
+        dest: "{{ pvc_file }}"
+
+    - name: Create the PVC
+      shell: oc create -f {{ pvc_file }} --insecure-skip-tls-verify
+      register: pvc_output
+
+    - name: Create the Pod template
+      template:
+        src: "{{ pod_template }}"
+        dest: "{{ pod_file }}"
+
+    - name: Create the Pod
+      shell: oc create -f {{ pod_file }} --insecure-skip-tls-verify
+      register: pod_output
+
+    - name: Display Pod creation status
+      debug:
+        var: pod_output.stdout
