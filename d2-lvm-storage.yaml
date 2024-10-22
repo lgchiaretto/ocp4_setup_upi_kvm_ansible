@@ -21,7 +21,7 @@
     extra_disks: "{{ extra_disks | int }}"  # Garantir que seja sempre tratado como inteiro
 
   tasks:
-    - name: Display the constructed API server URL
+    - name: Display the API server URL
       debug:
         var: api_server_url
 
