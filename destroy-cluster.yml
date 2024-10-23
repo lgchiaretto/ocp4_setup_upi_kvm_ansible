@@ -3,13 +3,13 @@
   gather_facts: false
   become: true
   become_method: ansible.builtin.sudo
-      
-  vars: 
+
+  vars:
     start_time: "{{ lookup('pipe', 'date +%s') }}"
-      
+
   tasks:
     - name: Collect the start time
-      set_fact:
+      ansible.builtin.set_fact:
         start_time: "{{ lookup('pipe', 'date +%s') }}"
 
     - name: Get a list of all virtual machines
@@ -60,19 +60,19 @@
       when: deletefiles.changed
 
     - name: Collect the end time
-      set_fact:
+      ansible.builtin.set_fact:
         end_time: "{{ lookup('pipe', 'date +%s') }}"
-        
+
     - name: Calculate the script execution time
-      set_fact:
+      ansible.builtin.set_fact:
         total_time: "{{ (end_time | int) - (start_time | int) }}"
-      
+
     - name: Convert the execution time to hour, minute and seconds
-      set_fact:
+      ansible.builtin.set_fact:
         hours: "{{ (total_time | int) // 3600 }}"
         minutes: "{{ ((total_time | int) % 3600) // 60 }}"
         seconds: "{{ (total_time | int) % 60 }}"
-      
+
     - name: Show the script execution time
       ansible.builtin.debug:
         msg: "The execution time is {{ hours }}h {{ minutes }}m {{ seconds }}s."
