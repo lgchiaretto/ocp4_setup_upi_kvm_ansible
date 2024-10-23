@@ -12,6 +12,7 @@ master_mem: '32000'
 master_cpu: 8
 extra_disks: 0
 extra_disk_size: 100
+local_quay_registry: ''
 htpasswd_pass: 'Redhat@123'
 ssh_rsa: >-
   ssh-rsa AAAAB3Nza...

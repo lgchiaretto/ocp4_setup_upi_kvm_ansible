@@ -444,7 +444,7 @@
       when: sno == "false"
 
     - name: Create worker disks
-      ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-worker-{{ item | int + 1 }}.qcow2 120G"
+      ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-worker-{{ item }}.qcow2 120G"
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       with_sequence: count={{ n_worker }} start=0
@@ -757,7 +757,7 @@
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: createworkers.rc == 0
-      with_sequence: count={{ n_worker }}
+      with_sequence: count={{ n_worker }} start=0
       when: n_worker != 0
       become: true
 
@@ -767,7 +767,7 @@
       delay: "3"
       until: workerip.stdout is defined and workerip.stdout != ""
       register: workerip
-      with_sequence: count={{ n_worker }}
+      with_sequence: count={{ n_worker }} start=0
       when: n_worker != 0
       become: true
 
@@ -804,19 +804,19 @@
       community.libvirt.virt_net:
         name: "{{ kvmnetwork }}"
         command: modify
-        xml: "<host mac='{{ mac_addresses[item | int - 1] | first }}' ip='{{ worker_ips[item | int - 1] | first }}'/>"
+        xml: "<host mac='{{ mac_addresses[item | int ] | first }}' ip='{{ worker_ips[item | int] | first }}'/>"
       register: worker_info
-      with_sequence: count={{ n_worker }}
+      with_sequence: count={{ n_worker }} start=0
       when: n_worker != 0
       become: true
 
     - name: Adding worker names on dhcp
       ansible.builtin.lineinfile:
         path: "/etc/dnsmasq.{{ clustername }}.addnhosts"
-        line: '{{ worker_ips[item | int - 1] | first }} {{ clustername }}-worker-{{ item }}.{{ basedomain }}'
+        line: '{{ worker_ips[item | int] | first }} {{ clustername }}-worker-{{ item }}.{{ basedomain }}'
         state: present
       register: dhcpname
-      with_sequence: count={{ n_worker }}
+      with_sequence: count={{ n_worker }} start=0
       when: n_worker != 0
       become: true
 
@@ -849,12 +849,12 @@
 
     - name: Wait for SSH to be available on the worker node
       ansible.builtin.wait_for:
-        host: "{{ worker_ips[item | int - 1] | first }}"
+        host: "{{ worker_ips[item | int] | first }}"
         port: 22
         timeout: 3600
         state: started
         sleep: 10
-      with_sequence: count={{ n_worker }}
+      with_sequence: count={{ n_worker }} start=0
       when: n_worker != 0
 
     - name: Copy worker.ign to worker nodes
@@ -862,16 +862,16 @@
         src: "{{ clusters_dir }}/{{ clustername }}/worker.ign"
         dest: "/var/home/core/worker.ign"
         mode: "0644"
-      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
-      with_sequence: count={{ n_worker }}
+      delegate_to: "{{ worker_ips[item | int] | first }}"
+      with_sequence: count={{ n_worker }} start=0
       remote_user: "core"
       when: n_worker != 0
 
     - name: Execute coreos-installer on worker nodes
       ansible.builtin.shell:
         cmd: "coreos-installer install --ignition-file=/var/home/core/worker.ign /dev/vda"
-      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
-      with_sequence: count={{ n_worker }}
+      delegate_to: "{{ worker_ips[item | int] | first }}"
+      with_sequence: count={{ n_worker }} start=0
       remote_user: "core"
       become: true
       when: n_worker != 0
@@ -879,8 +879,8 @@
     - name: Rebooting worker nodes
       ansible.builtin.reboot:
         reboot_timeout: 300
-      delegate_to: "{{ worker_ips[item | int - 1] | first }}"
-      with_sequence: count={{ n_worker }}
+      delegate_to: "{{ worker_ips[item | int] | first }}"
+      with_sequence: count={{ n_worker }} start=0
       remote_user: "core"
       become: true
       when: n_worker != 0
@@ -979,7 +979,7 @@
         - nodes_info.resources[0].status.conditions is defined
         - (nodes_info.resources[0].status.conditions | selectattr('type', 'equalto', 'Ready'))
         - (nodes_info.resources[0].status.conditions | selectattr('reason', 'equalto', 'KubeletReady'))
-      with_sequence: start=1 end="{{ n_worker | int + 1 }}"
+      with_sequence: count={{ n_worker }} start=0
       when: n_worker != 0
 
     - name: Pause cronjob ocp-csr-approver

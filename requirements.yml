@@ -2,3 +2,5 @@
 collections:
   - name: kubernetes.core
   - name: community.libvirt
+  - name: community.general
+  - name: ansible.posix
