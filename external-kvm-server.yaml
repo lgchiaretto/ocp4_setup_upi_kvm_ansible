@@ -22,7 +22,6 @@
           [main]
           dns=dnsmasq
       register: configdnsmasq
-      become: true
 
     - name: Create cluster network conf on dnsmasq when not SNO
       ansible.builtin.template:
@@ -34,7 +33,6 @@
         setype: dnsmasq_etc_t
         seuser: system_u
       register: dnsmasqsno
-      become: true
 
     - name: Create addnhosts file when SNO
       ansible.builtin.template:
@@ -42,21 +40,18 @@
         dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
         mode: '0644'
       register: addnhosts
-      become: true
 
     - name: Stop systemd-resolved service
       ansible.builtin.systemd:
         name: systemd-resolved
         state: stopped
         enabled: false
-      become: true
       when: ansible_facts['distribution'] == 'Fedora'
 
     - name: Disable systemd-resolved from starting at boot
       ansible.builtin.systemd:
         name: systemd-resolved
         enabled: false
-      become: true
       when: ansible_facts['distribution'] == 'Fedora'
 
     - name: Remove /etc/resolv.conf
@@ -64,13 +59,11 @@
         path: /etc/resolv.conf
         state: absent
       when: ansible_facts['distribution'] == 'Fedora'
-      become: true
 
     - name: Restart Network Manager when configuring dnsmasq
       ansible.builtin.service:
         name: NetworkManager
         state: restarted
-      become: true
 
     - name: Sleeping 5 seconds to wait NetworkManager
       ansible.builtin.pause:
@@ -80,7 +73,6 @@
       ansible.builtin.dnf:
         name: haproxy
         state: present
-      become: true
       remote_user: "{{ external_kvm_node_user }}"
       delegate_to: "{{ external_kvm_node_ip }}"
 
@@ -89,7 +81,6 @@
         src: haproxy.cfg-podman.j2
         dest: "/etc/haproxy/haproxy.cfg"
         mode: '0644'
-      become: true
       remote_user: "{{ external_kvm_node_user }}"
       delegate_to: "{{ external_kvm_node_ip }}"
 
@@ -103,13 +94,12 @@
         proto: tcp
         setype: http_port_t
         state: present
-      become: true
       remote_user: "{{ external_kvm_node_user }}"
       delegate_to: "{{ external_kvm_node_ip }}"
 
     - name: Open port hapropxy ports in firewalld
       ansible.posix.firewalld:
-        port: "{{ item  }}/tcp"
+        port: "{{ item }}/tcp"
         permanent: true
         state: enabled
         immediate: true
@@ -121,14 +111,6 @@
       become: true
       remote_user: "{{ external_kvm_node_user }}"
       delegate_to: "{{ external_kvm_node_ip }}"
-
-    # - name: Reload firewalld to apply changes
-    #   ansible.posix.firewalld:
-    #     state: reloaded
-    #     immediate: true
-    #   become: true
-    #   remote_user: "{{ external_kvm_node_user }}"
-    #   delegate_to: "{{ external_kvm_node_ip }}"
 
     - name: Restart haproxy on LB
       ansible.builtin.systemd:
