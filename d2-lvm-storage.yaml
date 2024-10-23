@@ -2,7 +2,9 @@
 - name: Install LVM Storage and Configure LVMCluster
   hosts: localhost
   gather_facts: false
+  become_method: sudo
   become: true
+
 
   vars:
     extra_disks: "{{ extra_disks | default(0) | int }}"
