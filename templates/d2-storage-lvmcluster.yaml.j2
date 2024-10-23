@@ -1,0 +1,23 @@
+apiVersion: lvm.topolvm.io/v1alpha1
+kind: LVMCluster
+metadata:
+  name: my-lvmcluster
+  namespace: openshift-storage
+spec:
+  storage:
+    deviceClasses:
+    - name: vg1
+      fstype: ext4
+      default: true
+      deviceSelector:
+        paths:
+{% for device in extra_disks_list %}
+        - /dev/{{ device }}
+{% endfor %}
+      forceWipeDevicesAndDestroyAllData: true
+      thinPoolConfig:
+        name: thin-pool-1
+        sizePercent: 90
+        overprovisionRatio: 10
+        chunkSize: 128Ki
+        chunkSizeCalculationPolicy: Static
