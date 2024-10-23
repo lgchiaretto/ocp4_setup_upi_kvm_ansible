@@ -32,3 +32,18 @@ publish: External
 pullSecret: {{ pullsecret }}
 sshKey: |
   {{ ssh_rsa }}
+{%- if local_quay_registry != "" +%}
+imageContentSources:
+  - mirrors:
+    - {{ local_quay_registry }}/ocp4/rhel9
+    source: registry.redhat.io/rhel9
+  - mirrors:
+    - {{ local_quay_registry }}/ocp4/rhel8
+    source: registry.redhat.io/rhel8
+  - mirrors:
+    - {{ local_quay_registry }}/ocp4/openshift/release
+    source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
+  - mirrors:
+    - {{ local_quay_registry }}/ocp4/openshift/release-images
+    source: quay.io/openshift-release-dev/ocp-release
+{%- endif +%}
