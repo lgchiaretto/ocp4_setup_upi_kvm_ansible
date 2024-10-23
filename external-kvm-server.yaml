@@ -21,6 +21,7 @@
         content: |
           [main]
           dns=dnsmasq
+        mode: '0644'
       register: configdnsmasq
 
     - name: Create cluster network conf on dnsmasq when not SNO
