@@ -3,7 +3,8 @@
   hosts: localhost
   gather_facts: false
   become: true
-
+  become_method: ansible.builtin.sudo
+  
   vars:
     extra_disks: "{{ extra_disks | default(0) | int }}"
     lvmcluster_template: "templates/d2-storage-lvmcluster.yaml.j2"
@@ -146,7 +147,7 @@
         kind: Pod
         namespace: default
       register: pod_info
-      
+
     - name: Display Pod details
       debug:
         var: pod_info.resources
