@@ -64,15 +64,15 @@
       until: "'Succeeded' in lvm_csv_check.resources[0].status.phase"
 
     - name: Display LVM Storage installation status
-      debug:
+      ansible.builtin.debug:
         var: lvm_csv_check.resources[0].status.phase
 
     - name: Generate the list of extra disks
-      set_fact:
+      ansible.builtin.set_fact:
         extra_disks_list: "{{ ['vdb', 'vdc', 'vdd', 'vde', 'vdf', 'vdg', 'vdh', 'vdi', 'vdj', 'vdk'][:extra_disks] }}"
 
     - name: Display the generated list of extra disks
-      debug:
+      ansible.builtin.debug:
         var: extra_disks_list
 
     - name: Render the LVMCluster template with extra disks
@@ -149,5 +149,5 @@
       register: pod_info
 
     - name: Display Pod details
-      debug:
+      ansible.builtin.debug:
         var: pod_info.resources
