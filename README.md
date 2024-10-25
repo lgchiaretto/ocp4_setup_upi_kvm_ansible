@@ -43,11 +43,28 @@ ssh-keygen -t rsa
 
 Before running the playbook, edit the Ansible variables file and fill in the required parameters, such as sshrsa and pullsecret. You can obtain the pull secret by accessing Red Hat OpenShift Local (https://console.redhat.com/openshift/create/local) and clicking "Download pull secret".
 
-Use the variable `destroy_if_exists = 'true'` if you would like to remove an existing cluster before creating a new one
 
-If you are creating a Single Node OpenShift you must use `sno = 'true'`
-
-If you are creating a 3-node cluster you must use `sno = 'false'`
+| Variable             | Value (Example)              | Description                                                                                 |
+|-----------------------|---------------------|---------------------------------------------------------------------------------------------|
+| `clustername` | funny-flanders | The name of the cluster |
+| `basedomain` | chiaret.to | Base domain of the cluster (do not use .local) |
+| `ocpversion` | 4.16.16 | OpenShift version |
+| `clusters_dir` | "/labs" | Directory to create cluster files |
+| `sno` | 'true' | Defines the type of cluster to create. Use `'true'` for Single Node OpenShift and `'false'` for a 3-node cluster. |
+| `destroy_if_exists` | `'true'` | Removes the existing cluster before creating a new one. |
+| `kvmnetwork` | default | Network configured on KVM |
+| `worker_mem` | '4096' | Worker memory size in MB |
+| `worker_cpu` | 4 | Worker CPU (int) |
+| `n_worker` | 0 | Int |
+| `master_mem` | '32000' | Memory |
+| `master_cpu` | 8 | Int |
+| `extra_disks` | 0 | Number of extra disks to add |
+| `extra_disk_size` | 100 | Extra disk dize in GB |
+| `local_quay_registry` | '' | Local Quay URL to use as local mirror for OCP (if Red Hat Quay is configured) |
+| `admin_user` | "admin" | Configures a user to access the cluster using HTPasswd. |
+| `htpasswd_pass` | 'Redhat@123' | Password to admin_user |
+| `ssh_rsa`  | ssh-rsa AAAAB3Nza... | SSH Pubkey to access OCP nodes over SSH |
+| `pullsecret` | '{"auths":{"cloud.op..}}' | pull secret to download OpenShift images |
 
 ```
 vim ansible-vars-kvm.yaml
