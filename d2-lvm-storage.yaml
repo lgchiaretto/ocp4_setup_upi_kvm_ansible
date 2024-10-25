@@ -9,10 +9,23 @@
     kubeconfig_path: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
 
   tasks:
+    - name: Get master-0 information
+      community.libvirt.virt:
+        command: get_xml
+        name: "{{ clustername }}-master-0"
+      register: vm_info
+
+    - name: Parse the XML to count the number of disk devices
+      community.general.xml:
+        xmlstring: "{{ vm_info.get_xml }}"
+        xpath: "/domain/devices/disk[target/@dev]"
+        content: text
+      register: disk_devices
+
     - name: Fail if extra_disks is 0
       ansible.builtin.fail:
-        msg: "extra_disks must be higher than 0"
-      when: extra_disks == 0
+        msg: "There's no extra disk on master-0"
+      when: disk_devices.count == 2
 
     - name: Ensure openshift-storage namespace exists
       kubernetes.core.k8s:
