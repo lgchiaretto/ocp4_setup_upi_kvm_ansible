@@ -1,17 +1,20 @@
----
 - name: Install LVM Storage and Configure LVMCluster
   hosts: localhost
   gather_facts: false
-  become: true
   become_method: ansible.builtin.sudo
 
   vars:
-    extra_disks: "{{ extra_disks | default(0) | int }}"
+    extra_disks: "{{ extra_disks | int }}"
     lvmcluster_template: "templates/d2-storage-lvmcluster.yaml.j2"
     lvmcluster_file: "{{ clusters_dir }}/{{ clustername }}/d2-storage-lvmcluster.yaml"
-    kubeconfig_path: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"  # Caminho do kubeconfig
+    kubeconfig_path: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
 
   tasks:
+    - name: Fail if ocpversion is not valid
+      ansible.builtin.fail:
+        msg: "extra_disks must be higher than 0"
+      when: extra_disks == 0
+
     - name: Ensure openshift-storage namespace exists
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
@@ -61,7 +64,7 @@
       register: lvm_csv_check
       retries: 10
       delay: 30
-      until: "'Succeeded' in lvm_csv_check.resources[0].status.phase"
+      until: "'Succeeded' in lvm_csv_check.resources[0].status.phase and  lvm_csv_check.resources[0] is defined"
 
     - name: Display LVM Storage installation status
       ansible.builtin.debug:
@@ -75,16 +78,11 @@
       ansible.builtin.debug:
         var: extra_disks_list
 
-    - name: Render the LVMCluster template with extra disks
-      ansible.builtin.template:
-        src: "{{ lvmcluster_template }}"
-        dest: "{{ lvmcluster_file }}"
-
     - name: Apply the LVMCluster resource
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
         state: present
-        src: "{{ lvmcluster_file }}"
+        template: "{{ lvmcluster_template }}"
         namespace: openshift-storage
 
     - name: Wait for LVMCluster to be in Ready status
@@ -116,38 +114,18 @@
                 storage: 5Gi
             storageClassName: lvms-vg1
 
-    - name: Ensure Pod exists in default namespace
+    - name: Remove Pod in default namespace
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
-        state: present
-        definition:
-          apiVersion: v1
-          kind: Pod
-          metadata:
-            name: busybox
-            namespace: default
-          spec:
-            containers:
-              - name: busybox
-                image: busybox
-                command: [ "/bin/sh", "-c", "while true ; do date; sleep 1; done;" ]
-                volumeMounts:
-                  - mountPath: /pvc
-                    name: pvc
-            volumes:
-              - name: pvc
-                persistentVolumeClaim:
-                  claimName: example-pvc-rwo
-            restartPolicy: Never
-
-    - name: Display Pod creation status
-      kubernetes.core.k8s_info:
-        kubeconfig: "{{ kubeconfig_path }}"
-        api_version: v1
+        state: absent
         kind: Pod
+        name: busybox
         namespace: default
-      register: pod_info
 
-    - name: Display Pod details
-      ansible.builtin.debug:
-        var: pod_info.resources
+    - name: Remove PVC in default namespace
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: absent
+        kind: PersistentVolumeClaim
+        name: example-pvc-rwo
+        namespace: default
