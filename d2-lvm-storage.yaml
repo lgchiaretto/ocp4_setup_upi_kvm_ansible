@@ -1,6 +1,7 @@
 - name: Install LVM Storage and Configure LVMCluster
   hosts: localhost
   gather_facts: false
+  become_method: ansible.builtin.sudo
 
   vars:
     extra_disks: "{{ extra_disks | int }}"
@@ -14,6 +15,7 @@
         command: get_xml
         name: "{{ clustername }}-master-0"
       register: vm_info
+      become: true
 
     - name: Parse the XML to count the number of disk devices
       community.general.xml:
