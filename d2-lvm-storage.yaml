@@ -10,7 +10,7 @@
     kubeconfig_path: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
 
   tasks:
-    - name: Fail if ocpversion is not valid
+    - name: Fail if extra_disks is 0
       ansible.builtin.fail:
         msg: "extra_disks must be higher than 0"
       when: extra_disks == 0
