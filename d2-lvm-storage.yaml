@@ -113,6 +113,41 @@
                 storage: 5Gi
             storageClassName: lvms-vg1
 
+    - name: Ensure Pod exists in default namespace
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: busybox
+            namespace: default
+          spec:
+            containers:
+              - name: busybox
+                image: busybox
+                command: ["/bin/sh", "-c", "while true ; do date; sleep 1; done;"]
+                volumeMounts:
+                  - mountPath: /pvc
+                    name: pvc
+            volumes:
+              - name: pvc
+                persistentVolumeClaim:
+                  claimName: example-pvc-rwo
+            restartPolicy: Never
+
+    - name: Wait for the pod to be running
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        kind: Pod
+        name: busybox
+        namespace: default
+      register: pod_info
+      until: pod_info.resources[0].status.phase == 'Running'
+      retries: 30
+      delay: 5
+
     - name: Remove Pod in default namespace
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
