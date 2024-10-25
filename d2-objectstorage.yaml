@@ -8,6 +8,17 @@
     master_node: "{{ clustername }}-master-0.{{ basedomain }}"
 
   tasks:
+    - name: Label the master node for OCS storage scheduling
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        kind: Node
+        name: "{{ master_node }}"
+        definition:
+          metadata:
+            labels:
+              cluster.ocs.openshift.io/openshift-storage: ""
+
     - name: Ensure openshift-storage namespace exists
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
@@ -43,12 +54,13 @@
             name: odf-operator
             source: redhat-operators
             sourceNamespace: openshift-marketplace
-            channel: "stable-4.16"
             installPlanApproval: Automatic
-            config:
-              enableConsolePlugin: true
 
-    - name: Wait for ODF Operator CSV to be available
+    - name: COFFEE TIME! - Wait for 5 minutes to allow StorageCluster to initialize
+      ansible.builtin.pause:
+        seconds: 300
+
+    - name: Wait for ODF Operator CSV to be in 'Succeeded' state
       kubernetes.core.k8s_info:
         kubeconfig: "{{ kubeconfig_path }}"
         kind: ClusterServiceVersion
@@ -57,7 +69,7 @@
       register: csv_check
       retries: 10
       delay: 30
-      until: csv_check.resources | selectattr('status.phase', 'eq', 'Succeeded') | list | length > 0
+      until: "csv_check.resources | length > 0 and csv_check.resources[0].status.phase == 'Succeeded'"
 
     - name: Ensure ODF Operator is in 'Succeeded' state
       ansible.builtin.debug:
@@ -75,31 +87,20 @@
         src: "{{ clusters_dir }}/{{ clustername }}/d2-storagecluster.yaml"
         namespace: openshift-storage
 
-    - name: Wait for StorageCluster to be in Ready state
+    - name: DRINK WATER! - Wait for 3 minutes to allow StorageCluster to initialize
+      ansible.builtin.pause:
+        seconds: 180
+
+    - name: Wait for StorageCluster to have a valid status
       kubernetes.core.k8s_info:
         kubeconfig: "{{ kubeconfig_path }}"
         kind: StorageCluster
         api_version: ocs.openshift.io/v1
         namespace: openshift-storage
       register: storagecluster_status
-      retries: 10
-      delay: 30
-      until: storagecluster_status.resources[0].status.phase == "Ready"
-
-    - name: Label the master node for OCS storage scheduling
-      kubernetes.core.k8s:
-        kubeconfig: "{{ kubeconfig_path }}"
-        state: present
-        kind: Node
-        name: "{{ master_node }}"
-        definition:
-          metadata:
-            labels:
-              cluster.ocs.openshift.io/openshift-storage: ""
-    
-    - name: Wait for 30 seconds after applying the label
-      ansible.builtin.pause:
-        seconds: 30
+      retries: 15
+      delay: 60
+      until: "storagecluster_status.resources | length > 0 and storagecluster_status.resources[0].status.phase == 'Ready'"
 
     - name: Ensure obc-testing namespace exists
       kubernetes.core.k8s:
@@ -121,18 +122,10 @@
           spec:
             bucketName: test01-obc
             storageClassName: openshift-storage.noobaa.io
-
-    - name: Wait for OBC to be created and in 'Bound' state
-      ansible.builtin.shell: |
-        oc get obc test01-obc -n obc-testing -o jsonpath='{.status.phase}'
-      register: obc_status_shell
-      retries: 10
-      delay: 30
-      until: obc_status_shell.stdout == "Bound"
-
-    - name: Debug OBC status from shell
-      ansible.builtin.debug:
-        var: obc_status_shell.stdout
+    
+    - name: Bucket initializing - Wait for 2 minutes
+      ansible.builtin.pause:
+        seconds: 120
 
     - name: Gather S3 bucket information
       ansible.builtin.shell: |
@@ -157,3 +150,7 @@
     - name: Display S3 bucket details
       ansible.builtin.debug:
         msg: "{{ s3_info.stdout }}"
+
+    - name: Patch Console Operator to activate ODF console plugin
+      ansible.builtin.shell: |
+        oc patch console.operator cluster -n openshift-storage --type json -p '[{"op": "add", "path": "/spec/plugins", "value": ["odf-console"]}]'
