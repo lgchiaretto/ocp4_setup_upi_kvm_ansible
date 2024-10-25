@@ -1,7 +1,6 @@
 - name: Install LVM Storage and Configure LVMCluster
   hosts: localhost
   gather_facts: false
-  become_method: ansible.builtin.sudo
 
   vars:
     extra_disks: "{{ extra_disks | int }}"
