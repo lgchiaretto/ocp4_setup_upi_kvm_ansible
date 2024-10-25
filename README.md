@@ -51,7 +51,7 @@ Before running the playbook, edit the Ansible variables file and fill in the req
 | `ocpversion` | 4.16.16 | OpenShift version |
 | `clusters_dir` | "/labs" | Directory to create cluster files |
 | `sno` | 'true' | Defines the type of cluster to create. Use `'true'` for Single Node OpenShift and `'false'` for a 3-node cluster. |
-| `destroy_if_exists` | `'true'` | Removes the existing cluster before creating a new one. |
+| `destroy_if_exists` | `'true'` or `'false'` | Removes the existing cluster before creating a new one. |
 | `kvmnetwork` | default | Network configured on KVM |
 | `worker_mem` | '4096' | Worker memory size in MB |
 | `worker_cpu` | 4 | Worker CPU (int) |
@@ -61,8 +61,9 @@ Before running the playbook, edit the Ansible variables file and fill in the req
 | `extra_disks` | 0 | Number of extra disks to add |
 | `extra_disk_size` | 100 | Extra disk dize in GB |
 | `local_quay_registry` | '' | Local Quay URL to use as local mirror for OCP (if Red Hat Quay is configured) |
-| `admin_user` | "admin" | Configures a user to access the cluster using HTPasswd. |
+| `admin_user` | "admin" | Configures a user to access the cluster using HTPasswd. Empty Value "" means the user will not be configured |
 | `htpasswd_pass` | 'Redhat@123' | Password to admin_user |
+| `remove_kubeadmin_user` | `'true'` or `'false'` | Remove kubeadmin user after install the cluster |
 | `ssh_rsa`  | ssh-rsa AAAAB3Nza... | SSH Pubkey to access OCP nodes over SSH |
 | `pullsecret` | '{"auths":{"cloud.op..}}' | pull secret to download OpenShift images |
 

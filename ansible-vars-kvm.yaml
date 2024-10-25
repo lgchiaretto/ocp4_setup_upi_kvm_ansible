@@ -15,6 +15,7 @@ extra_disk_size: 100
 local_quay_registry: ''
 admin_user: ''
 htpasswd_pass: 'Redhat@123'
+remove_kubeadmin_user: 'false'
 ssh_rsa: >-
   ssh-rsa AAAAB3Nza...
 pullsecret: >-
