@@ -114,3 +114,27 @@ Execute the playbook
 ```
 ansible-playbook -e @ansible-vars-kvm.yaml add-new-nodes.yaml
 ```
+
+## Configure LVM Storage
+
+To configure LVM storage using the Logical Volume Manager (LVM) Operator after the cluster is up, you can use the playbook `d2-lvm-storage.yaml`.
+
+### Prerequisites:
+
+Ensure that your cluster was created with at least 1 extra disk and the `ansible-vars-kvm.yaml` file is correctly configured, including the following parameters:
+
+- `extra_disks`: Number of extra disks you have configured for extra disks creation. The playbook will automatically generate the corresponding disk names (e.g., `vdb`, `vdc`).
+
+### Steps:
+
+1. **Execute the playbook**:
+```
+ansible-playbook -e @ansible-vars-kvm.yaml d2-lvm-storage.yaml
+```
+
+This playbook performs the following tasks:
+
+- Creates the necessary namespace (`openshift-storage`).
+- Installs the LVM Operator from the Red Hat Operator Hub.
+- Configures the LVMCluster resource based on the available extra disks.
+- Creates a test PersistentVolumeClaim (PVC) and a Pod in the `default` namespace to verify the storage functionality.

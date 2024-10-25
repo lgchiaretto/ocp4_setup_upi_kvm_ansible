@@ -1,0 +1,153 @@
+---
+- name: Install LVM Storage and Configure LVMCluster
+  hosts: localhost
+  gather_facts: false
+  become: true
+  become_method: ansible.builtin.sudo
+
+  vars:
+    extra_disks: "{{ extra_disks | default(0) | int }}"
+    lvmcluster_template: "templates/d2-storage-lvmcluster.yaml.j2"
+    lvmcluster_file: "{{ clusters_dir }}/{{ clustername }}/d2-storage-lvmcluster.yaml"
+    kubeconfig_path: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"  # Caminho do kubeconfig
+
+  tasks:
+    - name: Ensure openshift-storage namespace exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: openshift-storage
+
+    - name: Ensure OperatorGroup exists in openshift-storage namespace
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: operators.coreos.com/v1
+          kind: OperatorGroup
+          metadata:
+            name: openshift-storage-operatorgroup
+            namespace: openshift-storage
+          spec:
+            targetNamespaces:
+              - openshift-storage
+
+    - name: Ensure LVMS Subscription exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: operators.coreos.com/v1alpha1
+          kind: Subscription
+          metadata:
+            name: lvms
+            namespace: openshift-storage
+          spec:
+            installPlanApproval: Automatic
+            name: lvms-operator
+            source: redhat-operators
+            sourceNamespace: openshift-marketplace
+
+    - name: Wait for LVM Storage operator to be installed
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: operators.coreos.com/v1alpha1
+        kind: ClusterServiceVersion
+        namespace: openshift-storage
+      register: lvm_csv_check
+      retries: 10
+      delay: 30
+      until: "'Succeeded' in lvm_csv_check.resources[0].status.phase"
+
+    - name: Display LVM Storage installation status
+      ansible.builtin.debug:
+        var: lvm_csv_check.resources[0].status.phase
+
+    - name: Generate the list of extra disks
+      ansible.builtin.set_fact:
+        extra_disks_list: "{{ ['vdb', 'vdc', 'vdd', 'vde', 'vdf', 'vdg', 'vdh', 'vdi', 'vdj', 'vdk'][:extra_disks] }}"
+
+    - name: Display the generated list of extra disks
+      ansible.builtin.debug:
+        var: extra_disks_list
+
+    - name: Render the LVMCluster template with extra disks
+      ansible.builtin.template:
+        src: "{{ lvmcluster_template }}"
+        dest: "{{ lvmcluster_file }}"
+
+    - name: Apply the LVMCluster resource
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        src: "{{ lvmcluster_file }}"
+        namespace: openshift-storage
+
+    - name: Wait for LVMCluster to be in Ready status
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: lvm.topolvm.io/v1alpha1
+        kind: LVMCluster
+        namespace: openshift-storage
+      register: lvmcluster_status
+      retries: 10
+      delay: 30
+      until: "'Ready' in lvmcluster_status.resources[0].status.state"
+
+    - name: Ensure PVC exists in default namespace
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: example-pvc-rwo
+            namespace: default
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 5Gi
+            storageClassName: lvms-vg1
+
+    - name: Ensure Pod exists in default namespace
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: busybox
+            namespace: default
+          spec:
+            containers:
+              - name: busybox
+                image: busybox
+                command: [ "/bin/sh", "-c", "while true ; do date; sleep 1; done;" ]
+                volumeMounts:
+                  - mountPath: /pvc
+                    name: pvc
+            volumes:
+              - name: pvc
+                persistentVolumeClaim:
+                  claimName: example-pvc-rwo
+            restartPolicy: Never
+
+    - name: Display Pod creation status
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        api_version: v1
+        kind: Pod
+        namespace: default
+      register: pod_info
+
+    - name: Display Pod details
+      ansible.builtin.debug:
+        var: pod_info.resources
