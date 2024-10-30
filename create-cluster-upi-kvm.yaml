@@ -24,6 +24,19 @@
         msg: "The 'ocpversion' variable is not a valid version!"
       when: result.status != 200
 
+    - name: Ensure necessary packages are installed
+      ansible.builtin.yum:
+        name:
+          - qemu-kvm
+          - libvirt
+          - virt-install
+          - virt-manager
+          - guestfs-tools
+          - python3-pip
+          - coreos-installer
+        state: present
+      become: true
+
     - name: Get a list of all virtual machines
       ansible.builtin.command: virsh list --all --name
       register: vms
@@ -108,19 +121,6 @@
     - name: Sleeping 5 seconds to wait NetworkManager
       ansible.builtin.pause:
         seconds: 5
-
-    - name: Ensure necessary packages are installed
-      ansible.builtin.yum:
-        name:
-          - qemu-kvm
-          - libvirt
-          - virt-install
-          - virt-manager
-          - guestfs-tools
-          - python3-pip
-          - coreos-installer
-        state: present
-      become: true
 
     - name: Ensure 'kubernetes' Python package is installed
       ansible.builtin.pip:
