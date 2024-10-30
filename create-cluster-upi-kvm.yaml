@@ -869,6 +869,8 @@
       with_sequence: count={{ n_worker }} start=0
       remote_user: "core"
       when: n_worker != 0
+      vars:
+        ansible_ssh_user: core
 
     - name: Execute coreos-installer on worker nodes
       ansible.builtin.shell:
@@ -878,6 +880,8 @@
       remote_user: "core"
       become: true
       when: n_worker != 0
+      vars:
+        ansible_ssh_user: core
 
     - name: Rebooting worker nodes
       ansible.builtin.reboot:
