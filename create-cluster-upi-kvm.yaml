@@ -887,6 +887,8 @@
       remote_user: "core"
       become: true
       when: n_worker != 0
+      vars:
+        ansible_ssh_user: core
 
     - name: Creating CSR Approver manifests
       kubernetes.core.k8s:
