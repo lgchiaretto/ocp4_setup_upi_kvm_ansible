@@ -143,6 +143,7 @@
         path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/"
         state: directory
         mode: '0755'
+        owner: "{{ lookup('env', 'USER') }}"
       become: true
 
     - name: Check if the installer file already exists on cache
@@ -155,6 +156,7 @@
         url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ ocpversion }}/openshift-install-linux.tar.gz"
         dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
         mode: '0644'
+        owner: "{{ lookup('env', 'USER') }}"
       become: true
       when: installfile.stat is defined and not installfile.stat.exists
 
@@ -168,6 +170,7 @@
         url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live.x86_64.iso"
         dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
         mode: '0644'
+        owner: "{{ lookup('env', 'USER') }}"
       become: true
       when:
         - rhcosisofile.stat is defined
@@ -230,6 +233,7 @@
         path: "{{ clusters_dir }}/{{ clustername }}"
         state: "directory"
         mode: "0755"
+        owner: "{{ lookup('env', 'USER') }}"
       become: true
 
     - name: Create rhcos-install directory directory
@@ -837,19 +841,11 @@
         insertafter: EOF
         owner: "{{ ansible_facts['user_id'] }}"
 
-    - name: Alterar proprietário e grupo para core
-      ansible.builtin.file:
-        path: "{{ clusters_dir }}"
-        owner: "{{ lookup('env', 'USER') }}"
-        recurse: true
-        state: directory
-
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
         minutes: 20
-      when: n_worker != 0
 
-    - name: Wait for SSH to be available on the worker nodes
+    - name: Wait for SSH to be available on the worker node
       ansible.builtin.wait_for:
         host: "{{ worker_ips[item | int] | first }}"
         port: 22
@@ -977,6 +973,7 @@
         path: "{{ clusters_dir }}/{{ clustername }}/auth/users.htpasswd"
         name: "{{ admin_user }}"
         password: "{{ htpasswd_pass }}"
+        owner: "{{ lookup('env', 'USER') }}"
         mode: "0640"
         create: true
       when: admin_user != ""
