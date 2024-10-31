@@ -844,6 +844,7 @@
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
         minutes: 20
+      when: n_worker == 0
 
     - name: Wait for SSH to be available on the worker node
       ansible.builtin.wait_for:
