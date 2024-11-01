@@ -5,6 +5,8 @@
   vars:
     mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
     start_time: "{{ lookup('pipe', 'date +%s') }}"
+    ansible_ssh_private_key_file: "~/.ssh/id_rsa"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
 
   tasks:
     - name: Collect the start time
@@ -35,6 +37,13 @@
           - python3-pip
           - coreos-installer
         state: present
+      become: true
+
+    - name: Ensure libvirtd service is running
+      ansible.builtin.service:
+        name: libvirtd
+        state: started
+        enabled: true
       become: true
 
     - name: Get a list of all virtual machines
@@ -830,16 +839,6 @@
         name: libvirtd
         state: restarted
       become: true
-
-    - name: Add StrictHostKeyChecking option to SSH config
-      ansible.builtin.lineinfile:
-        path: "{{ lookup('env', 'HOME') }}/.ssh/config"
-        create: true
-        mode: '0600'
-        line: "StrictHostKeyChecking no"
-        state: present
-        insertafter: EOF
-        owner: "{{ ansible_facts['user_id'] }}"
 
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
