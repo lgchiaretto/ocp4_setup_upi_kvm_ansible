@@ -6,9 +6,9 @@
 
   vars:
     start_time: "{{ lookup('pipe', 'date +%s') }}"
-    external_kvm_node_ip: 192.168.86.125
-    external_kvm_ocp_api_ip: 192.168.124.167
-    external_kvm_node_user: lchiaret
+    external_kvm_node_ip: 147.28.187.69
+    external_kvm_ocp_api_ip: 192.168.122.132
+    external_kvm_node_user: lab-user
 
   tasks:
     - name: Collect the start time
@@ -85,6 +85,11 @@
       remote_user: "{{ external_kvm_node_user }}"
       delegate_to: "{{ external_kvm_node_ip }}"
 
+    - name: Check if firewalld is started
+      ansible.builtin.command: systemctl is-active firewalld
+      register: firewalld_status
+      ignore_errors: true
+
     - name: Allow selinux on haproxy ports
       community.general.seport:
         ports:
@@ -112,6 +117,7 @@
       become: true
       remote_user: "{{ external_kvm_node_user }}"
       delegate_to: "{{ external_kvm_node_ip }}"
+      when: firewalld_status.rc == 0
 
     - name: Restart haproxy on LB
       ansible.builtin.systemd:
