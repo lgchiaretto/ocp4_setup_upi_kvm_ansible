@@ -840,6 +840,13 @@
         state: restarted
       become: true
 
+    - name: Change owner and group on clusters_dir
+      ansible.builtin.file:
+        path: "{{ clusters_dir }}"
+        owner: "{{ lookup('env', 'USER') }}"
+        recurse: true
+        state: directory
+
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
         minutes: 20
