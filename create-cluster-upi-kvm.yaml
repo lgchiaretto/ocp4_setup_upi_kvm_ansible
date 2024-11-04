@@ -353,7 +353,7 @@
 
     - name: Creating manifests for LSO and ODF operators
       ansible.builtin.template:
-        dest: "{{ clusters_dir }}/{{ clustername }}/{/openshift/99_{{ item }}.yaml"
+        dest: "{{ clusters_dir }}/{{ clustername }}/openshift/99_{{ item }}.yaml"
         mode: '0644'
         src: "{{ item }}.yaml.j2"
       loop:
@@ -786,18 +786,6 @@
       until: vms.stdout == ""
       when: sno == "false"
 
-    - name: Attaching extra disks on masters
-      ansible.builtin.command:
-        cmd: "virsh attach-disk {{ clustername }}-{{ item }} {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-{{ item }}-extra-disk.qcow2 vdb --cache none"
-      loop:
-        - "master-0"
-        - "master-1"
-        - "master-2"
-      register: extra_disks_result
-      become: true
-      changed_when: true
-      when: installodf == "true" and sno == "false"
-
     - name: Starting virtual machines when 3-node cluster
       ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
       register: startsnovms
@@ -809,6 +797,18 @@
         - "master-1"
         - "master-2"
       when: sno == "false"
+
+    - name: Attaching extra disks on masters
+      ansible.builtin.command:
+        cmd: "virsh attach-disk {{ clustername }}-{{ item }} {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-{{ item }}-extra-disk.qcow2 vdb --cache none"
+      loop:
+        - "master-0"
+        - "master-1"
+        - "master-2"
+      register: extra_disks_result
+      become: true
+      changed_when: true
+      when: installodf == "true" and sno == "false"
 
     - name: Define KVM Workers
       ansible.builtin.command: virt-install  --import --name {{ clustername }}-worker-{{ item }}   \
