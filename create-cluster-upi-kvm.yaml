@@ -840,10 +840,17 @@
         state: restarted
       become: true
 
+    - name: Getting user group name
+      ansible.builtin.command:
+        cmd: 'id -gn'
+      register: usergroup
+      changed_when: usergroup.rc == 0
+
     - name: Change owner and group on clusters_dir
       ansible.builtin.file:
         path: "{{ clusters_dir }}"
         owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ usergroup.stdout }}"
         recurse: true
         state: directory
 
