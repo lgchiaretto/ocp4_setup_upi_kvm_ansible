@@ -853,6 +853,7 @@
         group: "{{ usergroup.stdout }}"
         recurse: true
         state: directory
+      become: true
 
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
