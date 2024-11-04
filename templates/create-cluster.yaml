@@ -1,0 +1,293 @@
+- name: Prepare Create clusters
+  hosts: p1.chiaret.to
+  gather_facts: false
+
+  tasks:
+    - name: Create cluster directory
+      ansible.builtin.file:
+        path: "/data/vms/clusters/{{ clustername }}"
+        state: "directory"
+        mode: "0755"
+
+    - name: Create cluster ocpversion cache directory
+      ansible.builtin.file:
+        path: "/data/vms/clusters/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/"
+        state: "directory"
+        mode: "0755"
+
+    - name: Check if the installer file already exists on cache
+      ansible.builtin.stat:
+        path: "/data/vms/clusters/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+      register: installfile
+
+    - name: Download installer openshift-install-linux.tar.gz to cache
+      ansible.builtin.get_url:
+        url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ ocpversion }}/openshift-install-linux.tar.gz"
+        dest: "/data/vms/clusters/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+        mode: '0644'
+      when: installfile.stat is defined and not installfile.stat.exists
+
+    - name: Copy openshift-install-linux.tar.gz file to install dir
+      ansible.builtin.copy:
+        remote_src: true
+        src: "/data/vms/clusters/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+        dest: "/data/vms/clusters/{{ clustername }}/"
+        mode: "0644"
+
+    - name: Untar on openshift-install-linux.tar.gz file
+      ansible.builtin.unarchive:
+        remote_src: true
+        src: "/data/vms/clusters/{{ clustername }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+        dest: "/data/vms/clusters/{{ clustername }}"
+
+    - name: Copy install-config.yaml for ocp lower than 4.12
+      ansible.builtin.template:
+        src: install-config.yaml.j2
+        dest: /data/vms/clusters/{{ clustername }}/install-config.yaml
+        mode: '0644'
+      when: ("4.12" in ocpversion) and (clustertype == "ipi")
+
+    - name: Copy install-config.yaml for ocp 4.13+
+      ansible.builtin.template:
+        src: install-config.yaml.multiplezones.j2
+        dest: /data/vms/clusters/{{ clustername }}/install-config.yaml
+        mode: '0644'
+      when: (not "4.12" in ocpversion) and (clustertype == "ipi")
+
+    - name: Copy install-config.yaml for UPI clusters
+      ansible.builtin.template:
+        src: install-config.yaml-upi.j2
+        dest: /data/vms/clusters/{{ clustername }}/install-config.yaml
+        mode: '0644'
+      when: clustertype == "upi" and installocpvirt == "false"
+
+    - name: Copy install-config.yaml for UPI clusters with ovirt
+      ansible.builtin.template:
+        src: install-config.yaml-upi.j2
+        dest: /data/vms/clusters/{{ clustername }}/install-config.yaml
+        mode: '0644'
+      when: clustertype == "upi" and installocpvirt == "true"
+
+    - name: Executing certbot to create ingress certificate files
+      ansible.builtin.shell: source /home/lchiaret/python-app/venv/bin/activate && certbot certonly --authenticator dns-azure --dns-azure-config \
+                              /home/lchiaret/.azure/config.creds --preferred-challenges dns -d *.apps.{{ clustername }}.{{ basedomain }} \
+                             --logs-dir /tmp/letsencrypt --work-dir /tmp/letsencrypt
+      register: certtool
+      when: createcertfiles == "true"
+      changed_when: certtool.rc == 0
+
+    - name: Getting the *.apps cert
+      ansible.builtin.slurp:
+        path: "{{  '/etc/letsencrypt/live/apps.' + clustername + '.' + basedomain + '/fullchain.pem' }}"
+      register: appscert
+
+    - name: Getting the *.apps key
+      ansible.builtin.slurp:
+        path: "{{  '/etc/letsencrypt/live/apps.' + clustername + '.' + basedomain + '/privkey.pem' }}"
+      register: appskey
+
+    - name: Run create cluster manifests
+      ansible.builtin.command: "./openshift-install create manifests"
+      args:
+        chdir: "/data/vms/clusters/{{ clustername }}/"
+      register: createmanifests
+      changed_when: createmanifests.rc == 0
+
+    - name: Download Calico
+      ansible.builtin.get_url:
+        url: "https://github.com/projectcalico/calico/releases/download/v3.28.1/ocp.tgz"
+        dest: "/data/vms/clusters/{{ clustername }}/ocp.gz"
+        mode: '0644'
+      when: networktype == "Calico"
+
+    - name: Untar Calico
+      ansible.builtin.unarchive:
+        remote_src: true
+        src: "/data/vms/clusters/{{ clustername }}/ocp.gz"
+        dest: "/data/vms/clusters/{{ clustername }}/manifests/"
+        extra_opts:
+          - --strip-components=1
+      when: networktype == "Calico"
+
+    - name: Getting the infraid
+      ansible.builtin.command: jq -r '.["*installconfig.ClusterID"].InfraID' /data/vms/clusters/{{ clustername }}/.openshift_install_state.json
+      register: infraid
+      changed_when: infraid.rc == 0
+
+    - name: Configuring master as schedulable
+      ansible.builtin.replace:
+        path: "/data/vms/clusters/{{ clustername }}/manifests/cluster-scheduler-02-config.yml"
+        regexp: "mastersSchedulable: false"
+        replace: "mastersSchedulable: true"
+
+    - name: Creating AD Authenticating manifests
+      ansible.builtin.template:
+        src: "{{ item }}.yaml.j2"
+        dest: /data/vms/clusters/{{ clustername }}/openshift/99_{{ item }}.yaml
+        mode: '0644'
+      loop:
+        - secret-ad-chiaretto
+        - secret-htpass-secret
+        - ldap_bind_password
+        - ldap_clusterrole
+        - ldap_cronjob
+        - ldap_clusterrolebinfing
+        - rolebinding
+        - ldap_serviceaccount
+        - ldap_sync_configmap
+        - ldap_whitelist_configmap
+        - oauth
+
+    - name: Creating Ingress Controller manifests
+      ansible.builtin.template:
+        src: "{{ item }}.yaml.j2"
+        dest: /data/vms/clusters/{{ clustername }}/openshift/99_{{ item }}.yaml
+        mode: '0644'
+      loop:
+        - apps-cert
+        - ingresscontroller-default
+
+    - name: Creating 99_ms-infra and 99_mcp-infra.yaml
+      ansible.builtin.template:
+        src: "{{ item }}.yaml.j2"
+        dest: "/data/vms/clusters/{{ clustername }}/openshift/99_{{ item }}yaml"
+        mode: '0644'
+      loop:
+        - ms-infra
+        - mcp-infra
+      when: createinfra == "true" and clustertype == "ipi"
+
+    - name: Creating 98_nfs-namespace.yaml.j2
+      ansible.builtin.template:
+        src: nfs-namespace.yaml.j2
+        dest: /data/vms/clusters/{{ clustername }}/openshift/98_nfs-namespace.yaml
+        mode: '0644'
+      when: installnfs == "true"
+
+    - name: Creating 98_csr-approver-ns.yaml.j2
+      ansible.builtin.template:
+        src: csr-approver-ns.yaml.j2
+        dest: /data/vms/clusters/{{ clustername }}/openshift/98_csr-approver-ns.yaml
+        mode: '0644'
+      when: clustertype == "upi"
+
+    - name: Creating CSR Approver manifests
+      ansible.builtin.template:
+        src: "{{ item }}.yaml.j2"
+        dest: /data/vms/clusters/{{ clustername }}/openshift/99_{{ item }}.yaml
+        mode: '0644'
+      loop:
+        - csr-approver-sa
+        - csr-approver-cr
+        - csr-approver-crb
+        - csr-approver-rb
+        - csr-approver-cronjob
+      when: clustertype == "upi"
+
+    - name: Creating NFS provisioner storageclass
+      ansible.builtin.template:
+        src: "{{ item }}.yaml.j2"
+        dest: /data/vms/clusters/{{ clustername }}/openshift/99_{{ item }}.yaml
+        mode: '0644'
+      loop:
+        - nfs-clusterrolebinding-sa
+        - nfs-clusterrolebinding
+        - nfs-clusterrole
+        - nfs-deployment
+        - nfs-rolebinding
+        - nfs-role
+        - nfs-serviceaccount
+        - nfs-storageclass
+      when: installnfs == "true"
+
+    - name: Creating manifests for LSO and ODF namespaces
+      ansible.builtin.template:
+        dest: /data/vms/clusters/{{ clustername }}/openshift/98_{{ item }}.yaml
+        mode: '0644'
+        src: "{{ item }}.yaml.j2"
+      loop:
+        - local-storage-namespace
+        - odf-namespace
+      when: clustertype == "upi" and installodf == "true"
+
+    - name: Creating manifests for LSO and ODF operators
+      ansible.builtin.template:
+        dest: /data/vms/clusters/{{ clustername }}/openshift/99_{{ item }}.yaml
+        mode: '0644'
+        src: "{{ item }}.yaml.j2"
+      loop:
+        - local-storage-subscription
+        - local-storage-operatorgroup
+        - odf-subscription
+        - odf-operatorgroup
+      when: clustertype == "upi" and installodf == "true"
+
+    - name: Creating manifests for OCP Virt operator namespace
+      ansible.builtin.template:
+        dest: /data/vms/clusters/{{ clustername }}/openshift/98_ocpvirt-namespace.yaml
+        mode: '0644'
+        src: "ocpvirt-namespace.yaml.j2"
+      when: clustertype == "upi" and installocpvirt == "true"
+
+    - name: Creating manifests for OCP Virt operator namespace
+      ansible.builtin.template:
+        dest: /data/vms/clusters/{{ clustername }}/openshift/98_nmstate-namespace.yaml
+        mode: '0644'
+        src: "nmstate-namespace.yaml.j2"
+      when: clustertype == "upi" and installocpvirt == "true"
+
+    - name: Creating manifests for OCP Virt operator
+      ansible.builtin.template:
+        dest: /data/vms/clusters/{{ clustername }}/openshift/99_{{ item }}.yaml
+        mode: '0644'
+        src: "{{ item }}.yaml.j2"
+      loop:
+        - ocpvirt-subscription
+        - ocpvirt-operatorgroup
+        - nmstate-subscription
+        - nmstate-operatorgroup
+      when: clustertype == "upi" and installocpvirt == "true"
+
+    - name: Creating manifests for MetalLB and multiclusterengine namespaces
+      ansible.builtin.template:
+        dest: /data/vms/clusters/{{ clustername }}/openshift/98_{{ item }}.yaml
+        mode: '0644'
+        src: "{{ item }}.yaml.j2"
+      loop:
+        - metallb-namespace
+        - multicluster-namespace
+      when: clustertype == "upi" and installocpvirt == "true" and installmce == "true"
+
+    - name: Creating manifests for MetalLB and multiclusterengine operator
+      ansible.builtin.template:
+        dest: /data/vms/clusters/{{ clustername }}/openshift/99_{{ item }}.yaml
+        mode: '0644'
+        src: "{{ item }}.yaml.j2"
+      loop:
+        - metallb-subscription
+        - metallb-operatorgroup
+        - multicluster-subscription
+        - multicluster-operatorgroup
+      when: clustertype == "upi" and installocpvirt == "true" and installmce == "true"
+
+    - name: Creating script to start VM's
+      ansible.builtin.template:
+        dest: /data/vms/clusters/{{ clustername }}/startvms.sh
+        mode: '0755'
+        src: "startvms.sh.j2"
+
+    - name: Creating manage1password.py
+      ansible.builtin.template:
+        src: manage1password.py.j2
+        dest: /data/vms/clusters/{{ clustername }}/manage1password.py
+        mode: '0500'
+
+  handlers:
+    # FIX NOTIFY |(nao esquece)
+    - name: Recursively change ownership of /etc/letsencrypt/ directory
+      ansible.builtin.file:
+        path: /etc/letsencrypt/
+        state: directory
+        recurse: true
+        owner: lchiaret
+        group: lchiaret

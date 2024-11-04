@@ -333,6 +333,36 @@
         mode: '0644'
       when: sno == "false"
 
+    - name: Run create manifests files when not sno
+      ansible.builtin.command: "./openshift-install create manifests"
+      args:
+        chdir: "{{ clusters_dir }}/{{ clustername }}"
+      register: manifests
+      changed_when: true
+      when: sno == "false"
+
+    - name: Creating manifests for LSO and ODF namespaces
+      ansible.builtin.template:
+        dest: "{{ clusters_dir }}/{{ clustername }}/openshift/98_{{ item }}.yaml"
+        mode: '0644'
+        src: "{{ item }}.yaml.j2"
+      loop:
+        - local-storage-namespace
+        - odf-namespace
+      when: installodf == "true" and sno == "false"
+
+    - name: Creating manifests for LSO and ODF operators
+      ansible.builtin.template:
+        dest: "{{ clusters_dir }}/{{ clustername }}/{/openshift/99_{{ item }}.yaml"
+        mode: '0644'
+        src: "{{ item }}.yaml.j2"
+      loop:
+        - local-storage-subscription
+        - local-storage-operatorgroup
+        - odf-subscription
+        - odf-operatorgroup
+      when: installodf == "true" and sno == "false"
+
     - name: Run create single-node-ignition-config files
       ansible.builtin.command: "./openshift-install create single-node-ignition-config"
       args:
@@ -450,6 +480,19 @@
         - "master-1"
         - "master-2"
       when: sno == "false"
+
+    - name: Create extra disks on masters when installodf is true
+      ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-{{ item }}-extra-disk.qcow2 {{ extra_disk_size }}G"
+      args:
+        chdir: "{{ clusters_dir }}/{{ clustername }}"
+      loop:
+        - "master-0"
+        - "master-1"
+        - "master-2"
+      register: extra_disks_result
+      become: true
+      changed_when: true
+      when: installodf == "true" and sno == "false"
 
     - name: Create worker disks
       ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-worker-{{ item }}.qcow2 120G"
@@ -743,6 +786,18 @@
       until: vms.stdout == ""
       when: sno == "false"
 
+    - name: Attaching extra disks on masters
+      ansible.builtin.command:
+        cmd: "virsh attach-disk {{ clustername }}-{{ item }} {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-{{ item }}-extra-disk.qcow2 vdb --cache none"
+      loop:
+        - "master-0"
+        - "master-1"
+        - "master-2"
+      register: extra_disks_result
+      become: true
+      changed_when: true
+      when: installodf == "true" and sno == "false"
+
     - name: Starting virtual machines when 3-node cluster
       ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
       register: startsnovms
@@ -947,6 +1002,7 @@
         name: "{{ clustername }}-bootstrap"
         state: destroyed
       when: sno == "false"
+      become: true
 
     - name: Undefine bootstrap VM
       community.libvirt.virt:
@@ -954,6 +1010,7 @@
         command: undefine
         force: true
       when: sno == "false"
+      become: true
 
     - name: Set the number of replicas for the 'default' ingresscontroller to 3
       kubernetes.core.k8s:
@@ -967,6 +1024,52 @@
           spec:
             replicas: 3
       when: sno == "false"
+
+    - name: Check and wait for CRD LocalVolumeDiscovery
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        kind: CustomResourceDefinition
+        api_version: apiextensions.k8s.io/v1
+        name: localvolumediscoveries.local.storage.openshift.io
+      register: crd_info
+      retries: 60
+      delay: 10
+      until: crd_info.resources is defined
+      ignore_errors: true
+      when: installodf == "true" and sno == "false"
+
+    - name: Configuring LSO
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        state: present
+        template: '{{ item }}'
+      loop:
+        - local-storage-localvolumeset.yaml.j2
+        - local-storage-localvolumediscovery.yaml.j2
+      when: installodf == "true" and sno == "false"
+
+    - name: Check and wait for CRD to ODF
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        kind: CustomResourceDefinition
+        api_version: apiextensions.k8s.io/v1
+        name: storagesystems.odf.openshift.io
+      register: crd_sto_info
+      retries: 10
+      delay: 30
+      until: crd_sto_info.resources is defined
+      ignore_errors: true
+      when: installodf == "true" and sno == "false"
+
+    - name: Configuring ODF operator
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        state: present
+        template: '{{ item }}'
+      loop:
+        - odf-storagecluster.yaml.j2
+        - odf-storagesystem.yaml.j2
+      when: installodf == "true" and sno == "false"
 
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"
