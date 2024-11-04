@@ -12,6 +12,6 @@ spec:
       - key: kubernetes.io/hostname
         operator: In
         values:
-        - {{ clustername }}-master-0
-        - {{ clustername }}-master-1
-        - {{ clustername }}-master-2
+        - {{ clustername }}-master-0.{{ basedomain }}
+        - {{ clustername }}-master-1.{{ basedomain }}
+        - {{ clustername }}-master-2.{{ basedomain }}
