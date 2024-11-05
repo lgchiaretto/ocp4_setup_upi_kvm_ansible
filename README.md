@@ -1,6 +1,6 @@
 # OpenShift 4 Automated Cluster Installation (UPI on KVM) using Ansible
 
-This automation helps you create a Single Node OpenShift (SNO) or 3-node cluster on a KVM host using Libvirt.
+This automation helps you create a Single Node OpenShift (SNO) or 3-node cluster on a KVM host using Libvirt. It's possible to configure OpenShift Data Foundation (ODF) and OpenShift Virtualization when 3-node cluster.
 
 ## ⚠️ Important Notice
 
@@ -60,6 +60,8 @@ Before running the playbook, edit the Ansible variables file and fill in the req
 | `master_cpu` | 8 | Int |
 | `extra_disks` | 0 | Number of extra disks to add |
 | `extra_disk_size` | 100 | Extra disk dize in GB |
+| `installodf` | `'true'` or `'false'` | `true` if the cluster is a 3-node and ODF will be configured |
+| `installocpvirt` | `'true'` or `'false'` | `true` if the cluster is a 3-node with ODF and OpenShift Virtualization will be configured |
 | `local_quay_registry` | '' | Local Quay URL to use as local mirror for OCP (if Red Hat Quay is configured) |
 | `admin_user` | "admin" | Configures a user to access the cluster using HTPasswd. Empty Value "" means the user will not be configured |
 | `htpasswd_pass` | 'Redhat@123' | Password to admin_user |
