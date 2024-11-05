@@ -35,6 +35,12 @@ sshKey: |
 {%- if local_quay_registry != "" +%}
 imageContentSources:
   - mirrors:
+    - {{ local_quay_registry }}/ocp4/migration-toolkit-virtualization
+    source: registry.redhat.io/migration-toolkit-virtualization
+  - mirrors:
+    - {{ local_quay_registry }}/ocp4/container-native-virtualization
+    source: registry.redhat.io/container-native-virtualization
+  - mirrors:
     - {{ local_quay_registry }}/ocp4/rhel9
     source: registry.redhat.io/rhel9
   - mirrors:
