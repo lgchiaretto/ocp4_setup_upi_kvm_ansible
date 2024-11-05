@@ -482,7 +482,7 @@
       when: sno == "false"
 
     - name: Create extra disks on masters when installodf is true
-      ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-{{ item }}-extra-disk.qcow2 {{ extra_disk_size }}G"
+      ansible.builtin.command: "qemu-img create -o preallocation=falloc -f qcow2 {{ clustername }}-{{ item }}-extra-disk.qcow2 {{ extra_disk_size }}G"
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       loop:
@@ -958,6 +958,32 @@
       when: n_worker != 0
       vars:
         ansible_ssh_user: core
+
+    - name: Add ODF labels on nodes when upi
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        definition:
+          apiVersion: v1
+          kind: Node
+          metadata:
+            name: "{{ clustername }}-{{ item }}.{{ basedomain }}"
+            labels:
+              cluster.ocs.openshift.io/openshift-storage: ""
+              node-role.kubernetes.io/infra: ""
+              node-role.kubernetes.io/master: ""
+              node-role.kubernetes.io/worker: ""
+              node-role.kubernetes.io/control-plane: ""
+              beta.kubernetes.io/arch: amd64
+              beta.kubernetes.io/os: linux
+              kubernetes.io/arch: amd64
+              kubernetes.io/hostname: "{{ clustername }}-{{ item }}.{{ basedomain }}"
+              kubernetes.io/os: linux
+              node.openshift.io/os_id: rhcos
+      loop:
+        - "master-0"
+        - "master-1"
+        - "master-2"
+      when: installodf == "true" and sno == "false"
 
     - name: Creating CSR Approver manifests
       kubernetes.core.k8s:
