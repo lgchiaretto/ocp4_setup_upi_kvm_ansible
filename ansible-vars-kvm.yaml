@@ -13,6 +13,7 @@ master_cpu: 8
 extra_disks: 0
 extra_disk_size: 100
 installodf: 'false'
+installocpvirt : 'false'
 local_quay_registry: ''
 admin_user: ''
 htpasswd_pass: 'Redhat@123'

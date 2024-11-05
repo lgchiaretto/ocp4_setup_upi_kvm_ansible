@@ -363,6 +363,23 @@
         - odf-operatorgroup
       when: installodf == "true" and sno == "false"
 
+    - name: Creating manifests for OCP Virt operator namespace
+      ansible.builtin.template:
+        dest: "{{ clusters_dir }}/{{ clustername }}/openshift/98_ocpvirt-namespace.yaml"
+        mode: '0644'
+        src: "ocpvirt-namespace.yaml.j2"
+      when: installodf == "true" and installocpvirt == "true" and sno == "false"
+
+    - name: Creating manifests for OCP Virt operator
+      ansible.builtin.template:
+        dest: "{{ clusters_dir }}/{{ clustername }}/openshift/99_{{ item }}.yaml"
+        mode: '0644'
+        src: "{{ item }}.yaml.j2"
+      loop:
+        - ocpvirt-subscription
+        - ocpvirt-operatorgroup
+      when: installodf == "true"  and installocpvirt == "true" and sno == "false"
+
     - name: Run create single-node-ignition-config files
       ansible.builtin.command: "./openshift-install create single-node-ignition-config"
       args:
@@ -1096,6 +1113,39 @@
         - odf-storagecluster.yaml.j2
         - odf-storagesystem.yaml.j2
       when: installodf == "true" and sno == "false"
+
+    - name: Configuring OCP Virt Hyperconverged
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        state: present
+        template: ocpvirt-hyperconverged.yaml.j2
+      when: installodf == "true" and installocpvirt == "true" and sno == "false"
+
+    - name: Wait StorageClass ocs-storagecluster-ceph-rbd
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        api_version: storage.k8s.io/v1
+        kind: StorageClass
+        name: ocs-storagecluster-ceph-rbd
+      register: storageclass_info
+      retries: 30
+      delay: 10
+      until: storageclass_info.resources is defined
+      ignore_errors: true
+      when: installodf == "true" and installodf == "true" and sno == "false"
+
+    - name: Mark the StorageClass ocs-storagecluster-ceph-rbd as the default
+      kubernetes.core.k8s:
+        kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+        state: patched
+        kind: StorageClass
+        name: ocs-storagecluster-ceph-rbd
+        merge_type: strategic-merge
+        definition:
+          metadata:
+            annotations:
+              storageclass.kubernetes.io/is-default-class: "true"
+      when: installodf == "true" and installodf == "true" and sno == "false"
 
     - name: Run wait-for install-complete
       ansible.builtin.command: "./openshift-install wait-for install-complete"
