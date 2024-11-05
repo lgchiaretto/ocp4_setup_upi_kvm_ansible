@@ -35,11 +35,26 @@ sshKey: |
 {%- if local_quay_registry != "" +%}
 imageContentSources:
   - mirrors:
+    - {{ local_quay_registry }}/ocp4/migration-toolkit-virtualization
+    source: registry.redhat.io/migration-toolkit-virtualization
+  - mirrors:
+    - {{ local_quay_registry }}/ocp4/container-native-virtualization
+    source: registry.redhat.io/container-native-virtualization
+  - mirrors:
     - {{ local_quay_registry }}/ocp4/rhel9
     source: registry.redhat.io/rhel9
   - mirrors:
     - {{ local_quay_registry }}/ocp4/rhel8
     source: registry.redhat.io/rhel8
+  - mirrors:
+    - {{ local_quay_registry }}/ocp4/odf4
+    source: registry.redhat.io/odf4
+  - mirrors:
+    - {{ local_quay_registry }}/ocp4/openshift4
+    source: registry.redhat.io/openshift4
+  - mirrors:
+    - {{ local_quay_registry }}/ocp4/rhceph
+    source: registry.redhat.io/rhceph
   - mirrors:
     - {{ local_quay_registry }}/ocp4/openshift/release
     source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
