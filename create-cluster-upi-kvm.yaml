@@ -1066,6 +1066,11 @@
         definition:
           spec:
             replicas: 3
+      register: resultingress
+      until: resultingress is succeeded
+      retries: 60
+      delay: 10
+      failed_when: result is failed or resultingress.failed
       when: sno == "false"
 
     - name: Check and wait for CRD LocalVolumeDiscovery
@@ -1089,6 +1094,11 @@
       loop:
         - local-storage-localvolumeset.yaml.j2
         - local-storage-localvolumediscovery.yaml.j2
+      register: resultlso
+      until: resultlso is succeeded
+      retries: 60
+      delay: 10
+      failed_when: resultlso is failed or resultlso.failed
       when: installodf == "true" and sno == "false"
 
     - name: Check and wait for CRD to ODF
@@ -1112,6 +1122,11 @@
       loop:
         - odf-storagecluster.yaml.j2
         - odf-storagesystem.yaml.j2
+      register: resultodf
+      until: resultodf is succeeded
+      retries: 60
+      delay: 10
+      failed_when: resultodf is failed or resultodf.failed
       when: installodf == "true" and sno == "false"
 
     - name: Configuring OCP Virt Hyperconverged
@@ -1119,6 +1134,11 @@
         kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
         state: present
         template: ocpvirt-hyperconverged.yaml.j2
+      register: resulthc
+      until: resulthc is succeeded
+      retries: 60
+      delay: 10
+      failed_when: resulthc is failed or resulthc.failed
       when: installodf == "true" and installocpvirt == "true" and sno == "false"
 
     - name: Wait StorageClass ocs-storagecluster-ceph-rbd
@@ -1145,6 +1165,11 @@
           metadata:
             annotations:
               storageclass.kubernetes.io/is-default-class: "true"
+      register: resultsc
+      until: resultsc is succeeded
+      retries: 60
+      delay: 10
+      failed_when: resultsc is failed or resultsc.failed
       when: installodf == "true" and installodf == "true" and sno == "false"
 
     - name: Run wait-for install-complete
