@@ -41,6 +41,12 @@ imageContentSources:
     - {{ local_quay_registry }}/ocp4/rhel8
     source: registry.redhat.io/rhel8
   - mirrors:
+    - {{ local_quay_registry }}/ocp4/odf4
+    source: registry.redhat.io/odf4
+  - mirrors:
+    - {{ local_quay_registry }}/ocp4/openshift4
+    source: registry.redhat.io/openshift4
+  - mirrors:
     - {{ local_quay_registry }}/ocp4/openshift/release
     source: quay.io/openshift-release-dev/ocp-v4.0-art-dev
   - mirrors:
