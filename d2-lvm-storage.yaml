@@ -78,7 +78,7 @@
       register: lvm_csv_check
       retries: 10
       delay: 30
-      until: "'Succeeded' in lvm_csv_check.resources[0].status.phase and  lvm_csv_check.resources[0] is defined"
+      until: "lvm_csv_check.resources | length > 0 and lvm_csv_check.resources[0].status.phase == 'Succeeded'"
 
     - name: Display LVM Storage installation status
       ansible.builtin.debug:

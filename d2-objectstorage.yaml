@@ -1,0 +1,156 @@
+---
+- name: Install MCG and Configure Object Storage
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    kubeconfig_path: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    master_node: "{{ clustername }}-master-0.{{ basedomain }}"
+
+  tasks:
+    - name: Label the master node for OCS storage scheduling
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        kind: Node
+        name: "{{ master_node }}"
+        definition:
+          metadata:
+            labels:
+              cluster.ocs.openshift.io/openshift-storage: ""
+
+    - name: Ensure openshift-storage namespace exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        kind: Namespace
+        name: openshift-storage
+
+    - name: Create OperatorGroup for openshift-storage
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: operators.coreos.com/v1
+          kind: OperatorGroup
+          metadata:
+            name: openshift-storage-operatorgroup
+            namespace: openshift-storage
+          spec:
+            targetNamespaces:
+              - openshift-storage
+
+    - name: Create Subscription for ODF Operator
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: operators.coreos.com/v1alpha1
+          kind: Subscription
+          metadata:
+            name: odf-operator
+            namespace: openshift-storage
+          spec:
+            name: odf-operator
+            source: redhat-operators
+            sourceNamespace: openshift-marketplace
+            installPlanApproval: Automatic
+
+    - name: COFFEE TIME! - Wait for 5 minutes to allow StorageCluster to initialize
+      ansible.builtin.pause:
+        seconds: 300
+
+    - name: Wait for ODF Operator CSV to be in 'Succeeded' state
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        kind: ClusterServiceVersion
+        api_version: operators.coreos.com/v1alpha1
+        namespace: openshift-storage
+      register: csv_check
+      retries: 10
+      delay: 30
+      until: "csv_check.resources | length > 0 and csv_check.resources[0].status.phase == 'Succeeded'"
+
+    - name: Ensure ODF Operator is in 'Succeeded' state
+      ansible.builtin.debug:
+        msg: "ODF Operator is successfully installed."
+
+    - name: Render the StorageCluster template
+      ansible.builtin.template:
+        src: "templates/d2-storagecluster.yaml.j2"
+        dest: "{{ clusters_dir }}/{{ clustername }}/d2-storagecluster.yaml"
+
+    - name: Create the StorageCluster resource
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        src: "{{ clusters_dir }}/{{ clustername }}/d2-storagecluster.yaml"
+        namespace: openshift-storage
+
+    - name: DRINK WATER! - Wait for 3 minutes to allow StorageCluster to initialize
+      ansible.builtin.pause:
+        seconds: 180
+
+    - name: Wait for StorageCluster to have a valid status
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        kind: StorageCluster
+        api_version: ocs.openshift.io/v1
+        namespace: openshift-storage
+      register: storagecluster_status
+      retries: 15
+      delay: 60
+      until: "storagecluster_status.resources | length > 0 and storagecluster_status.resources[0].status.phase == 'Ready'"
+
+    - name: Ensure obc-testing namespace exists
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        kind: Namespace
+        name: obc-testing
+
+    - name: Create ObjectBucketClaim in the obc-testing namespace
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        state: present
+        definition:
+          apiVersion: objectbucket.io/v1alpha1
+          kind: ObjectBucketClaim
+          metadata:
+            name: test01-obc
+            namespace: obc-testing
+          spec:
+            bucketName: test01-obc
+            storageClassName: openshift-storage.noobaa.io
+    
+    - name: Bucket initializing - Wait for 2 minutes
+      ansible.builtin.pause:
+        seconds: 120
+
+    - name: Gather S3 bucket information
+      ansible.builtin.shell: |
+        BUCKET_HOST=$(oc get -n obc-testing configmap test01-obc -o jsonpath='{.data.BUCKET_HOST}')
+        BUCKET_NAME=$(oc get -n obc-testing configmap test01-obc -o jsonpath='{.data.BUCKET_NAME}')
+        BUCKET_PORT=$(oc get -n obc-testing configmap test01-obc -o jsonpath='{.data.BUCKET_PORT}')
+        BUCKET_KEY=$(oc get -n obc-testing secret test01-obc -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
+        BUCKET_SECRET=$(oc get -n obc-testing secret test01-obc -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+        echo "$BUCKET_HOST\n$BUCKET_NAME\n$BUCKET_PORT\n$BUCKET_KEY\n$BUCKET_SECRET"
+      register: s3_info
+
+    - name: Write S3 bucket information to file
+      ansible.builtin.copy:
+        dest: "{{ clusters_dir }}/{{ clustername }}/s3_bucket_info.txt"
+        content: |
+          BUCKET_HOST={{ s3_info.stdout.split('\n')[0] }}
+          BUCKET_NAME={{ s3_info.stdout.split('\n')[1] }}
+          BUCKET_PORT={{ s3_info.stdout.split('\n')[2] }}
+          BUCKET_KEY={{ s3_info.stdout.split('\n')[3] }}
+          BUCKET_SECRET={{ s3_info.stdout.split('\n')[4] }}
+
+    - name: Display S3 bucket details
+      ansible.builtin.debug:
+        msg: "{{ s3_info.stdout }}"
+
+    - name: Patch Console Operator to activate ODF console plugin
+      ansible.builtin.shell: |
+        oc patch console.operator cluster -n openshift-storage --type json -p '[{"op": "add", "path": "/spec/plugins", "value": ["odf-console"]}]'
