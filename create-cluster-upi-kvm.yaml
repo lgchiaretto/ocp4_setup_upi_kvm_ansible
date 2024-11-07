@@ -803,6 +803,32 @@
       until: vms.stdout == ""
       when: sno == "false"
 
+    - name: Add extra disks on master when install ODF
+      ansible.builtin.blockinfile:
+        path: "/etc/libvirt/qemu/{{ clustername }}-{{ item }}.xml"
+        marker: "<!-- {mark} ANSIBLE MANAGED BLOCK -->"
+        insertafter: "  <devices>$"
+        block: |
+          <disk type="file" device="disk">
+            <driver name="qemu" type="qcow2" cache="none"/>
+            <source file="{{ clusters_dir }}/{{ clustername }}/{{ clustername }}-{{ item }}-extra-disk.qcow2"/>
+            <target dev="vdb" bus="virtio"/>
+          </disk>
+      loop:
+        - "master-0"
+        - "master-1"
+        - "master-2"
+      register: extra_disks_result
+      become: true
+      changed_when: true
+      when: installodf == "true" and sno == "false"
+
+    - name: Restart libvirt when configuring dnsmasq
+      ansible.builtin.service:
+        name: libvirtd
+        state: restarted
+      become: true
+
     - name: Starting virtual machines when 3-node cluster
       ansible.builtin.command: "virsh start {{ clustername }}-{{ item }}"
       register: startsnovms
@@ -814,18 +840,6 @@
         - "master-1"
         - "master-2"
       when: sno == "false"
-
-    - name: Attaching extra disks on masters
-      ansible.builtin.command:
-        cmd: "virsh attach-disk {{ clustername }}-{{ item }} {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-{{ item }}-extra-disk.qcow2 vdb --cache none"
-      loop:
-        - "master-0"
-        - "master-1"
-        - "master-2"
-      register: extra_disks_result
-      become: true
-      changed_when: true
-      when: installodf == "true" and sno == "false"
 
     - name: Define KVM Workers
       ansible.builtin.command: virt-install  --import --name {{ clustername }}-worker-{{ item }}   \
