@@ -97,8 +97,23 @@
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
       changed_when: createworkers.rc == 0
-      with_sequence: start={{ workernodes | int + 1 }} end="{{ n_worker }}"
-      when: n_worker != 0
+      with_sequence: count={{ n_worker }} start=0
+      when: n_worker != 0 and installocpvirt != "true"
+      become: true
+
+    - name: Define KVM Workers when install OCP Virt
+      ansible.builtin.command: virt-install  --import --name {{ clustername }}-worker-{{ item }}   \
+            --disk {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-worker-{{ item }}.qcow2,bus=virtio,size=120 \
+            --disk {{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso,device=cdrom \
+            --boot hd,cdrom --check path_in_use=off --noautoconsole \
+            --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9-unknown \
+            --network network={{ kvmnetwork }},model=virtio --network bridge=br1,model=virtio \
+      register: createworkers
+      args:
+        chdir: "{{ clusters_dir }}/{{ clustername }}"
+      changed_when: createworkers.rc == 0
+      with_sequence: count={{ n_worker }} start=0
+      when: n_worker != 0 and installocpvirt == "true"
       become: true
 
     - name: Wait for the worker VM's to get an IP address
