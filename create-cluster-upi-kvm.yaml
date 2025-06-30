@@ -174,7 +174,7 @@
         path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
       register: rhcosisofile
 
-    - name: Download rhcos iso to cache
+    - name: Download rhcos iso to cache when ocp <= 4.18
       ansible.builtin.get_url:
         url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live.x86_64.iso"
         dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
@@ -184,6 +184,19 @@
       when:
         - rhcosisofile.stat is defined
         - not rhcosisofile.stat.exists
+        - (not "4.19" in ocpversion)
+
+    - name: Download rhcos iso to cache when ocp >= 4.19
+      ansible.builtin.get_url:
+        url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-iso.x86_64.iso"
+        dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+        mode: '0644'
+        owner: "{{ lookup('env', 'USER') }}"
+      become: true
+      when:
+        - rhcosisofile.stat is defined
+        - not rhcosisofile.stat.exists
+        - ("4.19" in ocpversion)
 
     - name: Check if the RHCOS file already exists on cache
       ansible.builtin.stat:
@@ -1029,6 +1042,10 @@
         - "master-0"
         - "master-1"
         - "master-2"
+      retries: 60
+      delay: 10
+      register: resultodfnodes
+      failed_when: resultodfnodes is failed or resultodfnodes.failed
       when: installodf == "true" and sno == "false"
 
     - name: Creating CSR Approver manifests

@@ -104,6 +104,7 @@
         state: present
       remote_user: "{{ external_kvm_node_user }}"
       delegate_to: "{{ external_kvm_node_ip }}"
+      ignore_errors: true
 
     - name: Open port hapropxy ports in firewalld
       ansible.posix.firewalld:
