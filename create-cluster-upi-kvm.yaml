@@ -245,7 +245,7 @@
 
     - name: Download rhcos-live-kernel-x86_64 images
       ansible.builtin.get_url:
-        url: "{{ mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-kernel-x86_64"
+        url: "{{ mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-kernel.x86_64"
         dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/vmlinuz"
         mode: "0644"
       when: kernelfile.stat is defined and not kernelfile.stat.exists and sno == "false"
