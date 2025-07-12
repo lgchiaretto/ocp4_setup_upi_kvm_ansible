@@ -969,6 +969,17 @@
         state: directory
       become: true
 
+    - name: Copying clustername.json template file
+      ansible.builtin.template:
+        src: clustername.json.j2
+        dest: "{{ clusters_dir }}/{{ clustername }}/{{ clustername }}.json"
+        mode: '0644'
+      register: copy_clustername_json
+      retries: 10
+      delay: 5
+      failed_when: copy_clustername_json is failed
+      until: copy_clustername_json is succeeded
+
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
         minutes: 20
@@ -1385,17 +1396,6 @@
       delay: 5
       failed_when: copy_create_tmuxp is failed
       until: copy_upgrade_tmuxp is succeeded
-
-    - name: Copying clustername.json template file
-      ansible.builtin.template:
-        src: clustername.json.j2
-        dest: "{{ clusters_dir }}/{{ clustername }}/{{ clustername }}.json"
-        mode: '0644'
-      register: copy_clustername_json
-      retries: 10
-      delay: 5
-      failed_when: copy_clustername_json is failed
-      until: copy_clustername_json is succeeded
 
     - name: Collect the end time
       ansible.builtin.set_fact:
