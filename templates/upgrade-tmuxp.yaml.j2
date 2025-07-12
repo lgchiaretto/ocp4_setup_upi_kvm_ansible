@@ -1,0 +1,15 @@
+session_name: "{{ clustername }}"
+start_directory: "{{ clusters_dir }}/{{ clustername }}"
+windows:
+- window_name: upgrade check
+  focus: true
+  layout: 990d,318x81,0,0[318x40,0,0,7,318x40,0,41{159x40,0,41,8,158x40,160,41[158x24,160,41,9,158x15,160,66,10]}]
+  options:
+    automatic-rename: 'off'
+  shell_command_before:
+    - tmux select-window -t 'UPGRADE:{{ clustername }}' 'upgrade check'
+  panes:
+    - watch -n2 "oc get pods -A -o wide | grep -E '0/|CrashLoopBackOff|Terminating' | grep -v Completed"
+    - watch -n2 oc get co
+    - watch -n2 "oc adm upgrade"
+    - watch -n2 oc get nodes
