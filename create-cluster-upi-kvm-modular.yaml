@@ -1,7 +1,7 @@
 ---
 - name: Create clusters UPI on KVM
   hosts: localhost
-  become_method: sudo
+  become_method: ansible.builtin.sudo
 
   vars:
     start_time: "{{ lookup('pipe', 'date +%s') }}"

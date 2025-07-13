@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Script para facilitar o uso do playbook modular
 # Usage: ./run-modular-playbook.sh [options]
 
 set -e
@@ -9,7 +8,6 @@ PLAYBOOK="create-cluster-upi-kvm-modular.yaml"
 VARS_FILE="ansible-vars-kvm.yaml"
 INVENTORY="localhost,"
 
-# Function to display usage
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
@@ -23,7 +21,6 @@ usage() {
     echo "  $0 -i inventory.ini -v production.yaml     # Use custom inventory and vars"
 }
 
-# Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
         -v|--vars-file)
@@ -46,7 +43,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Check if files exist
 if [[ ! -f "$PLAYBOOK" ]]; then
     echo "Error: Playbook '$PLAYBOOK' not found!"
     exit 1
