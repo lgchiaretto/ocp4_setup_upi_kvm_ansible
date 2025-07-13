@@ -19,14 +19,12 @@ Automated OpenShift cluster deployment on KVM using Ansible. Supports both **Sin
 
 ## 📋 Table of Contents
 
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-- [Installation Options](#installation-options)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [Day 2 Operations](#day-2-operations)
-- [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
+- [Prerequisites](#-prerequisites)
+- [Quick Start](#-quick-start)
+- [Configuration](#️-configuration)
+- [Usage](#-usage)
+- [Day 2 Operations](#-day-2-operations)
+- [Troubleshooting](#-troubleshooting)
 
 ## ⚠️ Important Notice
 
