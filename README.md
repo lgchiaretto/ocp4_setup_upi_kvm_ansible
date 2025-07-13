@@ -74,7 +74,7 @@ git clone https://github.com/lgchiaretto/ocp4_setup_upi_kvm_ansible.git
 cd ocp4_setup_upi_kvm_ansible
 ```
 
-#### 2. Install Ansible Collections
+### 2. Install Ansible Collections
 ```bash
 ansible-galaxy collection install -r requirements.yml
 ```
@@ -86,7 +86,6 @@ vim ansible-vars-kvm.yaml
 
 ### 4. Deploy Cluster
 
-#### Option A: Using Modular Playbook (Recommended)
 ```bash
 # Using helper script
 ./run-modular-playbook.sh
@@ -202,7 +201,7 @@ vim ansible-vars-kvm.yaml
 ./run-modular-playbook.sh
 
 # Or deploy using original playbook
-ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm.yaml
+ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm-modular.yaml
 ```
 
 ### Access Cluster
