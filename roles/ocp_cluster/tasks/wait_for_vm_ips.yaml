@@ -1,0 +1,70 @@
+---
+# Wait for VM IP addresses
+- name: Wait for master0 to get mac address when SNO
+  ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-0 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
+  register: master0infosno
+  until: master0infosno is defined and master0infosno.stdout != ""
+  retries: 180
+  delay: 1
+  become: true
+  changed_when: true
+  when: sno == "true"
+
+- name: Wait for master0 to get mac address when not SNO
+  ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-0 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
+  register: master0info
+  until: master0info is defined and master0info.stdout != ""
+  retries: 180
+  delay: 1
+  become: true
+  changed_when: true
+  when: sno == "false"
+
+- name: Wait for master1 to get mac address
+  ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-1 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
+  register: master1info
+  until: master1info is defined and master1info.stdout != ""
+  retries: 180
+  delay: 1
+  become: true
+  changed_when: true
+  when: sno == "false"
+
+- name: Wait for master2 to get mac address
+  ansible.builtin.shell: "virsh dumpxml {{ clustername }}-master-2 | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
+  register: master2info
+  until: master2info is defined and master2info.stdout != ""
+  retries: 180
+  delay: 1
+  become: true
+  changed_when: true
+  when: sno == "false"
+
+- name: Wait for the master-0 VM to get an IP address
+  ansible.builtin.shell: "virsh domifaddr {{ clustername }}-master-0 | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
+  retries: 180
+  delay: 3
+  until: master0ip.stdout is defined and master0ip.stdout != ""
+  register: master0ip
+  become: true
+  changed_when: true
+
+- name: Wait for the master-1 VM to get an IP address
+  ansible.builtin.shell: "virsh domifaddr {{ clustername }}-master-1 | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
+  retries: 180
+  delay: 3
+  until: master1ip.stdout is defined and master1ip.stdout != ""
+  register: master1ip
+  become: true
+  changed_when: true
+  when: sno == "false"
+
+- name: Wait for the master-2 VM to get an IP address
+  ansible.builtin.shell: "virsh domifaddr {{ clustername }}-master-2 | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
+  retries: 180
+  delay: 3
+  until: master2ip.stdout is defined and master2ip.stdout != ""
+  register: master2ip
+  become: true
+  changed_when: true
+  when: sno == "false"

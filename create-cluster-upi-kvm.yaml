@@ -980,6 +980,28 @@
       failed_when: copy_clustername_json is failed
       until: copy_clustername_json is succeeded
 
+    - name: Copying create-tmuxp.yaml file
+      ansible.builtin.template:
+        src: create-tmuxp.yaml.j2
+        dest: "{{ clusters_dir }}/{{ clustername }}/create-tmuxp.yaml"
+        mode: '0644'
+      register: copy_create_tmuxp
+      retries: 10
+      delay: 5
+      failed_when: copy_create_tmuxp is failed
+      until: copy_create_tmuxp is succeeded
+
+    - name: Copying upgrade-tmuxp.yaml file
+      ansible.builtin.template:
+        src: upgrade-tmuxp.yaml.j2
+        dest: "{{ clusters_dir }}/{{ clustername }}/upgrade-tmuxp.yaml"
+        mode: '0644'
+      register: copy_upgrade_tmuxp
+      retries: 10
+      delay: 5
+      failed_when: copy_create_tmuxp is failed
+      until: copy_upgrade_tmuxp is succeeded
+
     - name: Sleeping for 20 minutes before to check if cluster has been installed
       ansible.builtin.pause:
         minutes: 20
@@ -1374,28 +1396,6 @@
           spec:
             suspend: true
       when: n_worker != 0
-
-    - name: Copying create-tmuxp.yaml file
-      ansible.builtin.template:
-        src: create-tmuxp.yaml.j2
-        dest: "{{ clusters_dir }}/{{ clustername }}/create-tmuxp.yaml"
-        mode: '0644'
-      register: copy_create_tmuxp
-      retries: 10
-      delay: 5
-      failed_when: copy_create_tmuxp is failed
-      until: copy_create_tmuxp is succeeded
-
-    - name: Copying upgrade-tmuxp.yaml file
-      ansible.builtin.template:
-        src: upgrade-tmuxp.yaml.j2
-        dest: "{{ clusters_dir }}/{{ clustername }}/upgrade-tmuxp.yaml"
-        mode: '0644'
-      register: copy_upgrade_tmuxp
-      retries: 10
-      delay: 5
-      failed_when: copy_create_tmuxp is failed
-      until: copy_upgrade_tmuxp is succeeded
 
     - name: Collect the end time
       ansible.builtin.set_fact:

@@ -1,0 +1,42 @@
+---
+# Default variables for OCP cluster setup
+ocp_cluster_mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
+
+# Python packages to install
+ocp_cluster_python_packages:
+  - kubernetes
+  - passlib
+
+# Required system packages
+ocp_cluster_required_packages:
+  - qemu-kvm
+  - libvirt
+  - virt-install
+  - virt-manager
+  - guestfs-tools
+  - python3-pip
+  - coreos-installer
+
+# ODF operator components
+ocp_cluster_lso_manifests:
+  - local-storage-namespace
+  - odf-namespace
+
+ocp_cluster_lso_operators:
+  - local-storage-subscription
+  - local-storage-operatorgroup
+  - odf-subscription
+  - odf-operatorgroup
+
+ocp_cluster_ocpvirt_operators:
+  - ocpvirt-subscription
+  - ocpvirt-operatorgroup
+
+# CSR Approver components
+ocp_cluster_csr_approver_manifests:
+  - csr-approver-ns
+  - csr-approver-sa
+  - csr-approver-cr
+  - csr-approver-crb
+  - csr-approver-rb
+  - csr-approver-cronjob

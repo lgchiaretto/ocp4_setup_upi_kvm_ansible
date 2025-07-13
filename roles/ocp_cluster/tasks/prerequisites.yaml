@@ -1,0 +1,61 @@
+---
+# System prerequisites setup
+- name: Ensure necessary packages are installed
+  ansible.builtin.yum:
+    name: "{{ ocp_cluster_required_packages }}"
+    state: present
+  become: true
+
+- name: Ensure libvirtd service is running
+  ansible.builtin.service:
+    name: libvirtd
+    state: started
+    enabled: true
+  become: true
+
+- name: Configuring networkmanager to use dnsmasq
+  ansible.builtin.copy:
+    dest: "/etc/NetworkManager/conf.d/nm-dns.conf"
+    content: |
+      [main]
+      dns=dnsmasq
+  register: configdnsmasq
+  become: true
+
+- name: Stop systemd-resolved service
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: stopped
+    enabled: false
+  become: true
+  when: ansible_facts['distribution'] == 'Fedora'
+
+- name: Disable systemd-resolved from starting at boot
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    enabled: false
+  become: true
+  when: ansible_facts['distribution'] == 'Fedora'
+
+- name: Remove /etc/resolv.conf
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    state: absent
+  when: ansible_facts['distribution'] == 'Fedora'
+  become: true
+
+- name: Restart Network Manager when configuring dnsmasq
+  ansible.builtin.service:
+    name: NetworkManager
+    state: restarted
+  become: true
+
+- name: Sleeping 5 seconds to wait NetworkManager
+  ansible.builtin.pause:
+    seconds: 5
+
+- name: Ensure Python packages are installed
+  ansible.builtin.pip:
+    name: "{{ ocp_cluster_python_packages }}"
+    state: present
+    executable: pip

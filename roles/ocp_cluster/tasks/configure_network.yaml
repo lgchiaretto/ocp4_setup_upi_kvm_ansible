@@ -1,0 +1,65 @@
+---
+# Configure network and DNS settings
+- name: Wait for master VMs to get IP addresses
+  ansible.builtin.include_tasks: wait_for_vm_ips.yaml
+
+- name: Create cluster network conf on dnsmasq when SNO
+  ansible.builtin.template:
+    src: "cluster-network.conf-sno.j2"
+    dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
+    mode: '0644'
+    selevel: s0
+    serole: object_r
+    setype: dnsmasq_etc_t
+    seuser: system_u
+  register: dnsmasq
+  become: true
+  when: sno == "true"
+
+- name: Create cluster network conf on dnsmasq when not SNO
+  ansible.builtin.template:
+    src: "cluster-network.conf.j2"
+    dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
+    mode: '0644'
+    selevel: s0
+    serole: object_r
+    setype: dnsmasq_etc_t
+    seuser: system_u
+  register: dnsmasq
+  become: true
+  when: sno == "false"
+
+- name: Create addnhosts file when not SNO
+  ansible.builtin.template:
+    src: "dnsmasq.openshift.addnhosts.j2"
+    dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+    mode: '0644'
+  register: addnhosts
+  become: true
+  when: sno == "false"
+
+- name: Create addnhosts file when SNO
+  ansible.builtin.template:
+    src: "dnsmasq.openshift.addnhosts-sno.j2"
+    dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+    mode: '0644'
+  register: addnhosts
+  become: true
+  when: sno == "true"
+
+- name: Restart Network Manager when configuring dnsmasq
+  ansible.builtin.service:
+    name: NetworkManager
+    state: restarted
+  when: dnsmasq.changed
+  become: true
+
+- name: Restart libvirt when configuring dnsmasq
+  ansible.builtin.service:
+    name: libvirtd
+    state: restarted
+  when: dnsmasq.changed
+  become: true
+
+- name: Configure DHCP reservations
+  ansible.builtin.include_tasks: configure_dhcp.yaml

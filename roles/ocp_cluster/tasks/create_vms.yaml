@@ -1,0 +1,11 @@
+---
+# Create and configure virtual machines
+- name: Include load balancer creation for non-SNO
+  ansible.builtin.include_tasks: create_loadbalancer.yaml
+  when: sno == "false"
+
+- name: Include VM disk creation tasks
+  ansible.builtin.include_tasks: create_vm_disks.yaml
+
+- name: Include VM definition tasks
+  ansible.builtin.include_tasks: define_vms.yaml

@@ -1,0 +1,111 @@
+---
+# Configure ODF storage
+- name: Add ODF labels on nodes when upi
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    definition:
+      apiVersion: v1
+      kind: Node
+      metadata:
+        name: "{{ clustername }}-{{ item }}.{{ basedomain }}"
+        labels:
+          cluster.ocs.openshift.io/openshift-storage: ""
+          node-role.kubernetes.io/infra: ""
+          node-role.kubernetes.io/master: ""
+          node-role.kubernetes.io/worker: ""
+          node-role.kubernetes.io/control-plane: ""
+          beta.kubernetes.io/arch: amd64
+          beta.kubernetes.io/os: linux
+          kubernetes.io/arch: amd64
+          kubernetes.io/hostname: "{{ clustername }}-{{ item }}.{{ basedomain }}"
+          kubernetes.io/os: linux
+          node.openshift.io/os_id: rhcos
+  loop:
+    - "master-0"
+    - "master-1"
+    - "master-2"
+  retries: 60
+  delay: 10
+  register: resultodfnodes
+  failed_when: resultodfnodes is failed
+
+- name: Check and wait for CRD LocalVolumeDiscovery
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    kind: CustomResourceDefinition
+    api_version: apiextensions.k8s.io/v1
+    name: localvolumediscoveries.local.storage.openshift.io
+  register: crd_info
+  retries: 60
+  delay: 10
+  until: crd_info.resources is defined
+  ignore_errors: true
+
+- name: Configuring LSO
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    state: present
+    template: '{{ item }}'
+  loop:
+    - local-storage-localvolumeset.yaml.j2
+    - local-storage-localvolumediscovery.yaml.j2
+  register: resultlso
+  until: resultlso is succeeded
+  retries: 60
+  delay: 10
+  failed_when: resultlso is failed
+
+- name: Check and wait for CRD to ODF
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    kind: CustomResourceDefinition
+    api_version: apiextensions.k8s.io/v1
+    name: storagesystems.odf.openshift.io
+  register: crd_sto_info
+  retries: 10
+  delay: 30
+  until: crd_sto_info.resources is defined
+  ignore_errors: true
+
+- name: Configuring ODF operator
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    state: present
+    template: '{{ item }}'
+  loop:
+    - odf-storagecluster.yaml.j2
+    - odf-storagesystem.yaml.j2
+  register: resultodf
+  until: resultodf is succeeded
+  retries: 60
+  delay: 10
+  failed_when: resultodf is failed
+
+- name: Wait StorageClass ocs-storagecluster-ceph-rbd
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+    name: ocs-storagecluster-ceph-rbd
+  register: storageclass_info
+  retries: 30
+  delay: 10
+  until: storageclass_info.resources is defined
+  ignore_errors: true
+
+- name: Mark the StorageClass ocs-storagecluster-ceph-rbd as the default
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    state: patched
+    kind: StorageClass
+    name: ocs-storagecluster-ceph-rbd
+    merge_type: strategic-merge
+    definition:
+      metadata:
+        annotations:
+          storageclass.kubernetes.io/is-default-class: "true"
+  register: resultsc
+  until: resultsc is succeeded
+  retries: 60
+  delay: 10
+  failed_when: resultsc is failed

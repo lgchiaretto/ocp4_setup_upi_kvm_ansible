@@ -1,0 +1,54 @@
+---
+# Create load balancer VM for non-SNO deployments
+- name: Customize LB for OpenShift nodes (could take long time)
+  ansible.builtin.command: virt-builder fedora-40 --format qcow2 --cache {{ clusters_dir }}/.cache/ --size 10G -o "lb.qcow2" \
+                          --firstboot-command "nmcli con mod 'Wired connection 1' connection.id enp1s0" \
+                          --firstboot-command "sed -i 's/SELINUX=enforcing/SELINUX=disabled/' /etc/selinux/config" \
+                          --firstboot-command "systemctl disable firewalld" \
+                          --firstboot-command "setenforce 0" \
+                          --firstboot-command "reboot" \
+                          --ssh-inject "root:file:{{ clusters_dir }}/{{ clustername }}/id_rsa.pub" --selinux-relabel \
+                          --copy-in bootstrap.ign:/opt/ --copy-in master.ign:/opt/ --copy-in worker.ign:/opt/ \
+                          --copy-in tmpws.service:/etc/systemd/system/ \
+                          --hostname "lb-{{ clustername }}.{{ basedomain }}" \
+                          --install haproxy \
+                          --copy-in rhcos-install/rhcos-live-rootfs.x86_64.img:/opt/ \
+                          --copy-in rhcos-install/initramfs.img:/opt/ \
+                          --copy-in rhcos-install/vmlinuz:/opt/ \
+                          --copy-in rhcos-install/.treeinfo:/opt/ \
+                          --run-command "systemctl daemon-reload" \
+                          --run-command "systemctl enable tmpws.service" \
+                          --run-command "systemctl enable haproxy.service" \
+                          --root-password password:"{{ htpasswd_pass }}"
+  register: customizelb
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  changed_when: customizelb.rc == 0
+
+- name: Define and start LB
+  ansible.builtin.command: virt-install --import --name {{ clustername }}-lb --disk "lb.qcow2" \
+                          --memory 1024 --cpu host --vcpus 4 --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio \
+                          --noautoconsole --autostart
+  register: definelb
+  become: true
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  changed_when: definelb.rc == 0
+
+- name: Wait for lb to get mac address
+  ansible.builtin.shell: "virsh dumpxml {{ clustername }}-lb | grep 'mac address' | sed \"s/.*mac address='\\([^']*\\)'.*/\\1/\""
+  register: lb_info
+  until: lb_info is defined and lb_info.stdout != ""
+  retries: 180
+  delay: 1
+  become: true
+  changed_when: true
+
+- name: Wait for the lb VM to get an IP address
+  ansible.builtin.shell: "virsh domifaddr {{ clustername }}-lb | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
+  retries: 180
+  delay: 3
+  until: lbvip.stdout is defined and lbvip.stdout != ""
+  register: lbvip
+  become: true
+  changed_when: true

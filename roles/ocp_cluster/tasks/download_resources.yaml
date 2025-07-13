@@ -1,0 +1,56 @@
+---
+# Download and cache OCP resources
+- name: Create the OCP version cache directory if it does not exist
+  ansible.builtin.file:
+    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/"
+    state: directory
+    mode: '0755'
+    owner: "{{ lookup('env', 'USER') }}"
+  become: true
+
+- name: Check if the installer file already exists on cache
+  ansible.builtin.stat:
+    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+  register: installfile
+
+- name: Download installer openshift-install-linux.tar.gz to cache
+  ansible.builtin.get_url:
+    url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ ocpversion }}/openshift-install-linux.tar.gz"
+    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+    mode: '0644'
+    owner: "{{ lookup('env', 'USER') }}"
+  become: true
+  when: installfile.stat is defined and not installfile.stat.exists
+
+- name: Check if rhcos.iso file already exists on cache
+  ansible.builtin.stat:
+    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+  register: rhcosisofile
+
+- name: Download rhcos iso to cache when ocp <= 4.18
+  ansible.builtin.get_url:
+    url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live.x86_64.iso"
+    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+    mode: '0644'
+    owner: "{{ lookup('env', 'USER') }}"
+  become: true
+  when:
+    - rhcosisofile.stat is defined
+    - not rhcosisofile.stat.exists
+    - (not "4.19" in ocpversion)
+
+- name: Download rhcos iso to cache when ocp >= 4.19
+  ansible.builtin.get_url:
+    url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-iso.x86_64.iso"
+    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+    mode: '0644'
+    owner: "{{ lookup('env', 'USER') }}"
+  become: true
+  when:
+    - rhcosisofile.stat is defined
+    - not rhcosisofile.stat.exists
+    - ("4.19" in ocpversion)
+
+- name: Include RHCOS image download tasks for non-SNO
+  ansible.builtin.include_tasks: download_rhcos_images.yaml
+  when: sno == "false"

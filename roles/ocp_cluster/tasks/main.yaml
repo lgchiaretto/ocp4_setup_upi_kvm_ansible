@@ -1,0 +1,42 @@
+---
+# Main task file for OCP cluster setup
+- name: Validate OCP version and dependencies
+  ansible.builtin.include_tasks: validate.yaml
+
+- name: Setup system prerequisites
+  ansible.builtin.include_tasks: prerequisites.yaml
+
+- name: Cleanup existing cluster (if requested)
+  ansible.builtin.include_tasks: cleanup.yaml
+  when: destroy_if_exists == "true"
+
+- name: Download and cache OCP resources
+  ansible.builtin.include_tasks: download_resources.yaml
+
+- name: Prepare cluster directory and files
+  ansible.builtin.include_tasks: prepare_cluster.yaml
+
+- name: Create and configure VMs
+  ansible.builtin.include_tasks: create_vms.yaml
+
+- name: Configure network and DNS
+  ansible.builtin.include_tasks: configure_network.yaml
+
+- name: Create worker VMs (if needed)
+  ansible.builtin.include_tasks: create_workers.yaml
+  when: n_worker != 0
+
+- name: Install and wait for cluster
+  ansible.builtin.include_tasks: install_cluster.yaml
+
+- name: Configure authentication
+  ansible.builtin.include_tasks: configure_auth.yaml
+  when: admin_user != ""
+
+- name: Configure storage (ODF)
+  ansible.builtin.include_tasks: configure_storage.yaml
+  when: installodf == "true" and sno == "false"
+
+- name: Configure virtualization (OCP Virt)
+  ansible.builtin.include_tasks: configure_virtualization.yaml
+  when: installodf == "true" and installocpvirt == "true" and sno == "false"

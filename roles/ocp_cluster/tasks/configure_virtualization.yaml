@@ -1,0 +1,12 @@
+---
+# Configure OCP Virtualization
+- name: Configuring OCP Virt Hyperconverged
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    state: present
+    template: ocpvirt-hyperconverged.yaml.j2
+  register: resulthc
+  until: resulthc is succeeded
+  retries: 60
+  delay: 10
+  failed_when: resulthc is failed

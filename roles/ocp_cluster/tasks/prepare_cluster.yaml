@@ -1,0 +1,72 @@
+---
+# Prepare cluster directory and configuration files
+- name: Create cluster directory
+  ansible.builtin.file:
+    path: "{{ clusters_dir }}/{{ clustername }}"
+    state: "directory"
+    mode: "0755"
+    owner: "{{ lookup('env', 'USER') }}"
+  become: true
+
+- name: Create rhcos-install directory directory
+  ansible.builtin.file:
+    path: "{{ clusters_dir }}/{{ clustername }}/rhcos-install"
+    state: "directory"
+    mode: "0755"
+  when: sno == "false"
+
+- name: Copy openshift-install.tar.gz to cluster dir
+  ansible.builtin.copy:
+    remote_src: true
+    src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+    dest: "{{ clusters_dir }}/{{ clustername }}/"
+    mode: '0644'
+
+- name: Untar on openshift-install-linux.tar.gz file
+  ansible.builtin.unarchive:
+    remote_src: true
+    src: "{{ clusters_dir }}/{{ clustername }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+    dest: "{{ clusters_dir }}/{{ clustername }}"
+
+- name: Copy rhcos.iso to cluster dir to master
+  ansible.builtin.copy:
+    remote_src: true
+    src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+    dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-master.iso"
+    mode: '0644'
+  when: sno == "true"
+
+- name: Copy rhcos.iso to cluster dir to worker
+  ansible.builtin.copy:
+    remote_src: true
+    src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+    dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso"
+    mode: '0644'
+
+- name: Copy install-config.yaml
+  ansible.builtin.template:
+    src: install-config.yaml-upi.j2
+    dest: "{{ clusters_dir }}/{{ clustername }}/install-config.yaml"
+    mode: '0644'
+
+- name: Include RHCOS setup tasks for non-SNO
+  ansible.builtin.include_tasks: prepare_rhcos_files.yaml
+  when: sno == "false"
+
+- name: Include ignition generation tasks
+  ansible.builtin.include_tasks: generate_ignition.yaml
+
+- name: Copying cluster info files
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ clusters_dir }}/{{ clustername }}/{{ item.dest }}"
+    mode: '0644'
+  loop:
+    - { src: "clustername.json.j2", dest: "{{ clustername }}.json" }
+    - { src: "create-tmuxp.yaml.j2", dest: "create-tmuxp.yaml" }
+    - { src: "upgrade-tmuxp.yaml.j2", dest: "upgrade-tmuxp.yaml" }
+  register: copy_files
+  retries: 10
+  delay: 5
+  failed_when: copy_files is failed
+  until: copy_files is succeeded
