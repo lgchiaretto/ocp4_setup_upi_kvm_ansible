@@ -61,12 +61,7 @@ Running without careful review may lead to connectivity issues.
 sudo dnf install -y ansible-core
 ```
 
-#### 2. Install Ansible Collections
-```bash
-ansible-galaxy collection install -r requirements.yml
-```
-
-#### 3. Generate SSH Key (if needed)
+#### 2. Generate SSH Key (if needed)
 ```bash
 ssh-keygen -t rsa
 ```
@@ -79,12 +74,17 @@ git clone https://github.com/lgchiaretto/ocp4_setup_upi_kvm_ansible.git
 cd ocp4_setup_upi_kvm_ansible
 ```
 
-### 2. Configure Variables
+#### 2. Install Ansible Collections
+```bash
+ansible-galaxy collection install -r requirements.yml
+```
+
+### 3. Configure Variables
 ```bash
 vim ansible-vars-kvm.yaml
 ```
 
-### 3. Deploy Cluster
+### 4. Deploy Cluster
 
 #### Option A: Using Modular Playbook (Recommended)
 ```bash
@@ -94,30 +94,6 @@ vim ansible-vars-kvm.yaml
 # Or directly
 ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm-modular.yaml
 ```
-
-## 🛠️ Installation Options
-
-### 🗂️ Modular Structure Benefits
-
-```
-roles/ocp_cluster/
-├── defaults/main.yaml          # Centralized variables
-└── tasks/
-    ├── main.yaml              # Main orchestrator
-    ├── validate.yaml          # Version validation
-    ├── prerequisites.yaml     # System setup
-    ├── download_resources.yaml # OCP downloads
-    ├── create_vms.yaml        # VM creation
-    ├── configure_network.yaml # DNS/DHCP setup
-    ├── install_cluster.yaml   # Cluster installation
-    └── ...                    # 20+ specialized tasks
-```
-
-**Benefits:**
-- 🧩 **Modular**: Each function in dedicated file
-- 🔧 **Maintainable**: Easy to debug and modify
-- 🔄 **Reusable**: Role can be used in other projects
-- 👥 **Collaborative**: Multiple developers can work simultaneously
 
 ## ⚙️ Configuration
 
@@ -238,17 +214,6 @@ export KUBECONFIG="/labs/your-cluster/auth/kubeconfig"
 # Verify cluster
 oc get nodes
 oc get clusterversion
-```
-
-### Login to Web Console
-
-```bash
-# Get console URL
-oc whoami --show-console
-
-# Get admin password (if configured)
-echo "Username: admin"
-echo "Password: $(grep htpasswd_pass ansible-vars-kvm.yaml | cut -d: -f2 | tr -d "' ")"
 ```
 
 ## 🔄 Day 2 Operations
