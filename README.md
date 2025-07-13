@@ -33,7 +33,7 @@ Automated OpenShift cluster deployment on KVM using Ansible. Supports both **Sin
 **Please exercise caution** when running this playbook, as it modifies network settings. Ensure you:
 - Understand the changes being made
 - Have appropriate backups or recovery plans
-- Test in a non-production environment first
+- Do not use in production
 
 Running without careful review may lead to connectivity issues.
 
