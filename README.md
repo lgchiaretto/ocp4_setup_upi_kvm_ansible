@@ -68,20 +68,19 @@ ansible-galaxy collection install -r requirements.yml
 
 #### 3. Generate SSH Key (if needed)
 ```bash
-ssh-keygen -t rsa -b 4096 -C "your-email@example.com"
+ssh-keygen -t rsa
 ```
 
 ## 🚀 Quick Start
 
 ### 1. Clone Repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/lgchiaretto/ocp4_setup_upi_kvm_ansible.git
 cd ocp4_setup_upi_kvm_ansible
 ```
 
 ### 2. Configure Variables
 ```bash
-cp ansible-vars-kvm.yaml.example ansible-vars-kvm.yaml
 vim ansible-vars-kvm.yaml
 ```
 
@@ -94,11 +93,6 @@ vim ansible-vars-kvm.yaml
 
 # Or directly
 ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm-modular.yaml
-```
-
-#### Option B: Using Original Playbook
-```bash
-ansible-playbook -e @ansible-vars-kvm.yaml create-cluster-upi-kvm.yaml
 ```
 
 ## 🛠️ Installation Options

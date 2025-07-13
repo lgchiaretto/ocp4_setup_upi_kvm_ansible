@@ -1,4 +1,4 @@
-- name: Create clusters UPI on KVM
+- name: Create clusters UPI on KVM (DO NOT USE ME ANYMORE, USE MODULAR!)
   hosts: localhost
   become_method: sudo
 
