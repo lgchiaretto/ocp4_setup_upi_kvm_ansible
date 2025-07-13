@@ -298,28 +298,7 @@ ansible-playbook -e @ansible-vars-kvm.yaml -e destroy_if_exists=true create-clus
 
 ### Common Issues
 
-#### 1. DNS/Network Issues
-```bash
-# Check dnsmasq configuration
-sudo systemctl status NetworkManager
-ls -la /etc/dnsmasq.*.addnhosts
-
-# Restart network services
-sudo systemctl restart NetworkManager libvirtd
-```
-
-#### 2. VM Creation Problems
-```bash
-# Check libvirt status
-sudo systemctl status libvirtd
-virsh list --all
-
-# Check available storage
-df -h
-virsh pool-list --all
-```
-
-#### 3. OpenShift Installation Failures
+#### 1. OpenShift Installation Failures
 ```bash
 # Monitor installation progress
 export KUBECONFIG="/labs/your-cluster/auth/kubeconfig"
@@ -337,60 +316,5 @@ Run with verbose output for troubleshooting:
 ```bash
 # Verbose mode
 ansible-playbook -vvv -e @ansible-vars-kvm.yaml create-cluster-upi-kvm-modular.yaml
-
-# Syntax check
-ansible-playbook --syntax-check create-cluster-upi-kvm-modular.yaml
-
-# Dry run
-ansible-playbook --check -e @ansible-vars-kvm.yaml create-cluster-upi-kvm-modular.yaml
 ```
 
-### Logs and Monitoring
-
-```bash
-# System logs
-sudo journalctl -u libvirtd -f
-sudo journalctl -u NetworkManager -f
-
-# VM console access
-virsh console clustername-master-0
-
-# OpenShift logs
-oc logs -n openshift-kube-apiserver -l app=kube-apiserver
-```
-
-## 📚 Documentation
-
-- 📖 **[Modular Structure Guide](README-MODULAR.md)** - Detailed modular approach documentation
-- 🔧 **[Troubleshooting Guide](TROUBLESHOOTING.md)** - Comprehensive problem-solving guide
-- 📊 **[Complete Structure](ESTRUTURA-COMPLETA.md)** - Full project structure overview
-- 🔄 **[Applied Fixes](CORRECOES-APLICADAS.md)** - Recent fixes and improvements
-
-## 🤝 Contributing
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
-
-### Development Guidelines
-
-- Use the **modular structure** for new features
-- Follow **Ansible best practices**
-- Add appropriate **documentation**
-- Test on **supported distributions**
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- 📧 **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
-- 📚 **Documentation**: See `/docs` directory
-
----
-
-**Made with ❤️ for the OpenShift Community**
