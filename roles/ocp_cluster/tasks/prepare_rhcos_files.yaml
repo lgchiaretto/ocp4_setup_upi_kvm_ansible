@@ -1,0 +1,42 @@
+---
+# Prepare RHCOS files for non-SNO deployments
+- name: Copy files to rhcos-install directory
+  ansible.builtin.copy:
+    remote_src: true
+    src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/{{ item }}"
+    dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-install/"
+    mode: '0644'
+  with_items:
+    - vmlinuz
+    - initramfs.img
+    - rhcos-qemu.x86_64.qcow2.gz
+    - rhcos-live-rootfs.x86_64.img
+
+- name: Extract RHCOS image
+  ansible.builtin.command: "gunzip -f -d {{ clusters_dir }}/{{ clustername }}/rhcos-install/rhcos-qemu.x86_64.qcow2.gz"
+  register: extractdfile
+  changed_when: extractdfile.rc == 0
+
+- name: Resizing RHCOS image
+  ansible.builtin.command: "qemu-img resize {{ clusters_dir }}/{{ clustername }}/rhcos-install/rhcos-qemu.x86_64.qcow2 120G"
+  register: resizeqcow2
+  changed_when: resizeqcow2.rc == 0
+
+- name: Create treeinfo file
+  ansible.builtin.template:
+    src: treeinfo.j2
+    dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-install/.treeinfo"
+    mode: '0644'
+
+- name: Create tmpws.service file
+  ansible.builtin.template:
+    src: tmpws.service.j2
+    dest: "{{ clusters_dir }}/{{ clustername }}/tmpws.service"
+    mode: '0644'
+
+- name: Create ssh file
+  ansible.builtin.copy:
+    remote_src: true
+    content: "{{ ssh_rsa }}"
+    dest: "{{ clusters_dir }}/{{ clustername }}/id_rsa.pub"
+    mode: '0644'

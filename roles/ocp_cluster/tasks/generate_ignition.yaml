@@ -1,0 +1,71 @@
+---
+# Generate ignition configurations
+- name: Run create manifests files when not sno
+  ansible.builtin.command: "./openshift-install create manifests"
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  register: manifests
+  changed_when: true
+  when: sno == "false"
+
+- name: Creating manifests for LSO and ODF namespaces
+  ansible.builtin.template:
+    dest: "{{ clusters_dir }}/{{ clustername }}/openshift/98_{{ item }}.yaml"
+    mode: '0644'
+    src: "{{ item }}.yaml.j2"
+  loop: "{{ ocp_cluster_lso_manifests }}"
+  when: installodf == "true" and sno == "false"
+
+- name: Creating manifests for LSO and ODF operators
+  ansible.builtin.template:
+    dest: "{{ clusters_dir }}/{{ clustername }}/openshift/99_{{ item }}.yaml"
+    mode: '0644'
+    src: "{{ item }}.yaml.j2"
+  loop: "{{ ocp_cluster_lso_operators }}"
+  when: installodf == "true" and sno == "false"
+
+- name: Creating manifests for OCP Virt operator namespace
+  ansible.builtin.template:
+    dest: "{{ clusters_dir }}/{{ clustername }}/openshift/98_ocpvirt-namespace.yaml"
+    mode: '0644'
+    src: "ocpvirt-namespace.yaml.j2"
+  when: installodf == "true" and installocpvirt == "true" and sno == "false"
+
+- name: Creating manifests for OCP Virt operator
+  ansible.builtin.template:
+    dest: "{{ clusters_dir }}/{{ clustername }}/openshift/99_{{ item }}.yaml"
+    mode: '0644'
+    src: "{{ item }}.yaml.j2"
+  loop: "{{ ocp_cluster_ocpvirt_operators }}"
+  when: installodf == "true"  and installocpvirt == "true" and sno == "false"
+
+- name: Run create single-node-ignition-config files
+  ansible.builtin.command: "./openshift-install create single-node-ignition-config"
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  register: install
+  changed_when: true
+  when: sno == "true"
+
+- name: Run create ignition files
+  ansible.builtin.command: "./openshift-install create ignition-configs"
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  register: install
+  changed_when: true
+  when: sno == "false"
+
+- name: Add bootstrap.ign to rhcos-master.iso
+  ansible.builtin.command: "coreos-installer iso ignition embed -fi bootstrap-in-place-for-live-iso.ign rhcos-master.iso"
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  register: rhcosmaster
+  changed_when: true
+  when: sno == "true"
+
+- name: Add worker.ign to rhcos-worker.iso
+  ansible.builtin.command: "coreos-installer iso ignition embed -fi worker.ign rhcos-worker.iso"
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  register: rhcosworker
+  changed_when: true

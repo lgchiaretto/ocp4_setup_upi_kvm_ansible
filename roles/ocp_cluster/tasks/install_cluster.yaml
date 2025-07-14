@@ -1,0 +1,122 @@
+---
+# Install cluster and wait for completion
+- name: Run wait-for bootstrap-complete
+  ansible.builtin.command: "./openshift-install wait-for bootstrap-complete"
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  async: 3600
+  poll: 0
+  register: waitbootstrap
+  changed_when: true
+  when: sno == "false"
+
+- name: Check if bootstrap vm can be removed
+  ansible.builtin.async_status:
+    jid: "{{ waitbootstrap.ansible_job_id }}"
+  register: job_result
+  until: job_result.finished
+  delay: 10
+  retries: 600
+  when: sno == "false"
+
+- name: Remove bootstrap VM
+  community.libvirt.virt:
+    name: "{{ clustername }}-bootstrap"
+    state: destroyed
+  when: sno == "false"
+  become: true
+
+- name: Undefine bootstrap VM
+  community.libvirt.virt:
+    name: "{{ clustername }}-bootstrap"
+    command: undefine
+    force: true
+  when: sno == "false"
+  become: true
+
+- name: Set the number of replicas for the 'default' ingresscontroller to 3
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    api_version: operator.openshift.io/v1
+    kind: IngressController
+    namespace: openshift-ingress-operator
+    name: default
+    state: present
+    definition:
+      spec:
+        replicas: 3
+  register: resultingress
+  until: resultingress is succeeded
+  retries: 60
+  delay: 10
+  failed_when: resultingress is failed
+  when: sno == "false"
+
+- name: Creating CSR Approver manifests
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    state: present
+    template: "{{ item }}.yaml.j2"
+  loop: "{{ ocp_cluster_csr_approver_manifests }}"
+  register: result
+  until: result is succeeded
+  retries: 60
+  delay: 10
+  failed_when: result is failed
+  when: n_worker != 0
+
+- name: Run wait-for install-complete
+  ansible.builtin.command: "./openshift-install wait-for install-complete"
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  async: 3600
+  poll: 0
+  register: install
+  changed_when: true
+
+- name: Check if the cluster has been installed
+  ansible.builtin.async_status:
+    jid: "{{ install.ansible_job_id }}"
+  register: job_result
+  until: job_result.finished
+  delay: 10
+  retries: 600
+
+- name: Wait for worker nodes to be ready
+  kubernetes.core.k8s_info:
+    kind: Node
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    name: "{{ clustername }}-worker-{{ item }}.{{ basedomain }}"
+  register: nodes_info
+  retries: 120
+  delay: 10
+  until:
+    - nodes_info.resources[0].status is defined
+    - nodes_info.resources[0].status.conditions is defined
+    - (nodes_info.resources[0].status.conditions | selectattr('type', 'equalto', 'Ready'))
+    - (nodes_info.resources[0].status.conditions | selectattr('reason', 'equalto', 'KubeletReady'))
+  with_sequence: count={{ n_worker }} start=0
+  when: n_worker != 0
+
+- name: Pause cronjob ocp-csr-approver
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    state: present
+    definition:
+      apiVersion: batch/v1
+      kind: CronJob
+      metadata:
+        name: "ocp-csr-approver"
+        namespace: "ocp-csr-approver"
+      spec:
+        suspend: true
+  when: n_worker != 0
+
+- name: Change owner and group on clusters_dir
+  ansible.builtin.file:
+    path: "{{ clusters_dir }}"
+    owner: "{{ lookup('env', 'USER') }}"
+    group: "{{ lookup('pipe', 'id -gn') }}"
+    recurse: true
+    state: directory
+  become: true

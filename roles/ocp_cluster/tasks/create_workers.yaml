@@ -1,0 +1,152 @@
+---
+# Create and configure worker VMs
+- name: Define KVM Workers
+  ansible.builtin.command: virt-install  --import --name {{ clustername }}-worker-{{ item }}   \
+        --disk {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-worker-{{ item }}.qcow2,bus=virtio,size=120 \
+        --disk {{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso,device=cdrom \
+        --boot hd,cdrom --check path_in_use=off --noautoconsole \
+        --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio \
+  register: createworkers
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  changed_when: createworkers.rc == 0
+  with_sequence: count={{ n_worker }} start=0
+  when: installocpvirt != "true"
+  become: true
+
+- name: Define KVM Workers when install OCP Virt
+  ansible.builtin.command: virt-install  --import --name {{ clustername }}-worker-{{ item }}   \
+        --disk {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-worker-{{ item }}.qcow2,bus=virtio,size=120 \
+        --disk {{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso,device=cdrom \
+        --boot hd,cdrom --check path_in_use=off --noautoconsole \
+        --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9-unknown \
+        --network network={{ kvmnetwork }},model=virtio --network bridge=br1,model=virtio \
+  register: createworkers
+  args:
+    chdir: "{{ clusters_dir }}/{{ clustername }}"
+  changed_when: createworkers.rc == 0
+  with_sequence: count={{ n_worker }} start=0
+  when: installocpvirt == "true"
+  become: true
+
+- name: Wait for the worker VM's to get an IP address
+  ansible.builtin.shell: "virsh domifaddr {{ clustername }}-worker-{{ item }} | grep ipv4 | awk '{print $4}' | cut -d'/' -f1"
+  retries: 180
+  delay: 3
+  until: workerip.stdout is defined and workerip.stdout != ""
+  register: workerip
+  with_sequence: count={{ n_worker }} start=0
+  become: true
+
+- name: Wait a moment for VMs to stabilize
+  ansible.builtin.pause:
+    seconds: 10
+
+- name: Get a list of all virtual machines
+  ansible.builtin.command: virsh list --all --name
+  register: vms
+  changed_when: vms.rc == 0
+  become: true
+
+- name: Filter VMs containing 'worker' in their names
+  ansible.builtin.set_fact:
+    worker_vms: "{{ vms.stdout_lines | select('search', 'worker') }}"
+  become: true
+
+- name: Gather MAC addresses of VMs
+  ansible.builtin.command: virsh domifaddr {{ item }}
+  loop: "{{ worker_vms }}"
+  register: vm_interfaces
+  changed_when: vm_interfaces.rc == 0
+  become: true
+
+- name: Extract MAC addresses from interface information
+  ansible.builtin.set_fact:
+    mac_addresses: "{{ mac_addresses | default([]) + [item.stdout | regex_findall('([\\w:]{17})')] }}"
+    worker_ips: "{{ worker_ips | default([]) + [item.stdout | regex_findall('\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}')] }}"
+  loop: "{{ vm_interfaces.results }}"
+  become: true
+
+- name: Adding worker mac on DHCP
+  community.libvirt.virt_net:
+    name: "{{ kvmnetwork }}"
+    command: modify
+    xml: "<host mac='{{ mac_addresses[item | int ] | first }}' ip='{{ worker_ips[item | int] | first }}'/>"
+  register: worker_info
+  with_sequence: count={{ n_worker }} start=0
+  become: true
+
+- name: Check if addnhosts file exists
+  ansible.builtin.stat:
+    path: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+  register: addnhosts_file
+  become: true
+
+- name: Create addnhosts file if it doesn't exist
+  ansible.builtin.file:
+    path: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+    state: touch
+    mode: '0644'
+  become: true
+  when: not addnhosts_file.stat.exists
+
+- name: Adding worker names on dhcp
+  ansible.builtin.lineinfile:
+    path: "/etc/dnsmasq.{{ clustername }}.addnhosts"
+    line: '{{ worker_ips[item | int] | first }} {{ clustername }}-worker-{{ item }}.{{ basedomain }}'
+    state: present
+  register: dhcpname
+  with_sequence: count={{ n_worker }} start=0
+  become: true
+
+- name: Restart Network Manager when configuring worker dnsmasq
+  ansible.builtin.service:
+    name: NetworkManager
+    state: restarted
+  become: true
+
+- name: Restart libvirt when configuring worker dnsmasq
+  ansible.builtin.service:
+    name: libvirtd
+    state: restarted
+  become: true
+
+- name: Wait for SSH to be available on the worker node
+  ansible.builtin.wait_for:
+    host: "{{ worker_ips[item | int] | first }}"
+    port: 22
+    timeout: 3600
+    state: started
+    sleep: 10
+  with_sequence: count={{ n_worker }} start=0
+
+- name: Copy worker.ign to worker nodes
+  ansible.builtin.copy:
+    src: "{{ clusters_dir }}/{{ clustername }}/worker.ign"
+    dest: "/var/home/core/worker.ign"
+    mode: "0644"
+  delegate_to: "{{ worker_ips[item | int] | first }}"
+  with_sequence: count={{ n_worker }} start=0
+  remote_user: "core"
+  vars:
+    ansible_ssh_user: core
+
+- name: Execute coreos-installer on worker nodes
+  ansible.builtin.shell:
+    cmd: "coreos-installer install --ignition-file=/var/home/core/worker.ign /dev/vda"
+  delegate_to: "{{ worker_ips[item | int] | first }}"
+  with_sequence: count={{ n_worker }} start=0
+  remote_user: "core"
+  become: true
+  vars:
+    ansible_ssh_user: core
+
+- name: Rebooting worker nodes
+  ansible.builtin.reboot:
+    reboot_timeout: 300
+  delegate_to: "{{ worker_ips[item | int] | first }}"
+  with_sequence: count={{ n_worker }} start=0
+  remote_user: "core"
+  become: true
+  vars:
+    ansible_ssh_user: core

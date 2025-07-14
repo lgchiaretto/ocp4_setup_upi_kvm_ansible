@@ -1,0 +1,14 @@
+---
+# Validation tasks
+- name: Check if ocp version is valid
+  ansible.builtin.uri:
+    url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ ocpversion }}/openshift-client-linux.tar.gz"
+    method: HEAD
+    status_code: 200
+  register: result
+  ignore_errors: true
+
+- name: Fail if ocpversion is not valid
+  ansible.builtin.fail:
+    msg: "The 'ocpversion' variable is not a valid version!"
+  when: result.status != 200

@@ -1,0 +1,36 @@
+---
+- name: Create clusters UPI on KVM
+  hosts: localhost
+  become_method: ansible.builtin.sudo
+
+  vars:
+    start_time: "{{ lookup('pipe', 'date +%s') }}"
+    ansible_ssh_private_key_file: "~/.ssh/id_rsa"
+    ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+
+  pre_tasks:
+    - name: Collect the start time
+      ansible.builtin.set_fact:
+        start_time: "{{ lookup('pipe', 'date +%s') }}"
+
+  roles:
+    - ocp_cluster
+
+  post_tasks:
+    - name: Collect the end time
+      ansible.builtin.set_fact:
+        end_time: "{{ lookup('pipe', 'date +%s') }}"
+
+    - name: Calculate the script execution time
+      ansible.builtin.set_fact:
+        total_time: "{{ (end_time | int) - (start_time | int) }}"
+
+    - name: Convert the execution time to hour, minute and seconds
+      ansible.builtin.set_fact:
+        hours: "{{ (total_time | int) // 3600 }}"
+        minutes: "{{ ((total_time | int) % 3600) // 60 }}"
+        seconds: "{{ (total_time | int) % 60 }}"
+
+    - name: Show the script execution time
+      ansible.builtin.debug:
+        msg: "The execution time is {{ hours }}h {{ minutes }}m {{ seconds }}s."

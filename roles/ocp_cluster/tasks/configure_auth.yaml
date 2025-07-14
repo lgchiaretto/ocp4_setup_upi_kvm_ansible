@@ -1,0 +1,96 @@
+---
+# Configure authentication with HTPasswd
+- name: Create the HTPasswd file with admin user
+  community.general.htpasswd:
+    path: "{{ clusters_dir }}/{{ clustername }}/auth/users.htpasswd"
+    name: "{{ admin_user }}"
+    password: "{{ htpasswd_pass }}"
+    owner: "{{ lookup('env', 'USER') }}"
+    mode: "0640"
+    create: true
+
+- name: Create secret with HTPasswd data in OpenShift
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: htpass-secret
+        namespace: openshift-config
+      data:
+        htpasswd: "{{ lookup('file', clusters_dir + '/' + clustername + '/auth/users.htpasswd') | b64encode }}"
+      type: Opaque
+
+- name: Configure HTPasswd identity provider
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    state: present
+    definition:
+      apiVersion: config.openshift.io/v1
+      kind: OAuth
+      metadata:
+        name: cluster
+      spec:
+        identityProviders:
+        - name: htpasswd_provider
+          mappingMethod: claim
+          type: HTPasswd
+          htpasswd:
+            fileData:
+              name: htpass-secret
+  register: htpasswdprovider
+
+- name: Wait Until Authentication Operator start rollout
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    validate_certs: false
+    kind: ClusterOperator
+    name: authentication
+    wait: true
+    wait_condition:
+      type: Progressing
+      status: true
+    wait_timeout: 600
+  when: htpasswdprovider.changed
+
+- name: Wait Until Authentication be ready
+  kubernetes.core.k8s_info:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    validate_certs: false
+    kind: ClusterOperator
+    name: authentication
+    wait: true
+    wait_condition:
+      type: Progressing
+      status: false
+    wait_timeout: 600
+  when: htpasswdprovider.changed
+
+- name: Grant cluster-admin role to the new admin user
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    state: present
+    definition:
+      apiVersion: rbac.authorization.k8s.io/v1
+      kind: ClusterRoleBinding
+      metadata:
+        name: cluster-admin-{{ admin_user }}
+      subjects:
+        - kind: User
+          name: "{{ admin_user }}"
+          apiGroup: rbac.authorization.k8s.io
+      roleRef:
+        kind: ClusterRole
+        name: cluster-admin
+        apiGroup: rbac.authorization.k8s.io
+
+- name: Remove kubeadmin user
+  kubernetes.core.k8s:
+    kubeconfig: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
+    state: absent
+    kind: Secret
+    name: kubeadmin
+    namespace: kube-system
+  when: remove_kubeadmin_user == "true"

@@ -1,0 +1,49 @@
+---
+# Download RHCOS images for non-SNO deployments
+- name: Check if the RHCOS file already exists on cache
+  ansible.builtin.stat:
+    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-qemu.x86_64.qcow2"
+  register: rhcosfile
+
+- name: Check if the initramfs file already exists on cache
+  ansible.builtin.stat:
+    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/initramfs.img"
+  register: initramfsfile
+
+- name: Check if the rhcos-live-kernel-x86_64 file already exists on cache
+  ansible.builtin.stat:
+    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/vmlinuz"
+  register: kernelfile
+
+- name: Check if the rhcos-live-rootfs.x86_64.img file already exists on cache
+  ansible.builtin.stat:
+    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-live-rootfs.x86_64.img"
+  register: rootfsfile
+
+- name: Download RHCOS images
+  ansible.builtin.get_url:
+    url: "{{ ocp_cluster_mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-qemu.x86_64.qcow2.gz"
+    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-qemu.x86_64.qcow2.gz"
+    mode: "0644"
+  when: rhcosfile.stat is defined and not rhcosfile.stat.exists
+
+- name: Download rootfs file
+  ansible.builtin.get_url:
+    url: "{{ ocp_cluster_mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-rootfs.x86_64.img"
+    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-live-rootfs.x86_64.img"
+    mode: "0644"
+  when: rootfsfile.stat is defined and not rootfsfile.stat.exists
+
+- name: Download initramfs images
+  ansible.builtin.get_url:
+    url: "{{ ocp_cluster_mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-initramfs.x86_64.img"
+    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/initramfs.img"
+    mode: "0644"
+  when: initramfsfile.stat is defined and not initramfsfile.stat.exists
+
+- name: Download rhcos-live-kernel-x86_64 images
+  ansible.builtin.get_url:
+    url: "{{ ocp_cluster_mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-kernel.x86_64"
+    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/vmlinuz"
+    mode: "0644"
+  when: kernelfile.stat is defined and not kernelfile.stat.exists
