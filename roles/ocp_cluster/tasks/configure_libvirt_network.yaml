@@ -54,7 +54,8 @@
   become: true
 
 - name: Get network gateway IP for DNS
-  ansible.builtin.shell: "virsh net-dumpxml {{ kvmnetwork }} | grep \"ip address=\" | sed -n 's/.*address='\\([^']*\\)'.*/\\1/p'"
+  ansible.builtin.shell: |
+    virsh net-dumpxml {{ kvmnetwork }} | grep "ip address=" | sed -n "s/.*address='\([^']*\)'.*/\1/p"
   register: cluster_network_gateway
   become: true
   changed_when: false

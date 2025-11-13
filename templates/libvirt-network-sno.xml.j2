@@ -16,7 +16,6 @@
     <srv service='etcd-server-ssl' protocol='tcp' domain='{{ clustername }}.{{ basedomain }}' target='etcd-0.{{ clustername }}.{{ basedomain }}' port='2380' priority='0' weight='10'/>
   </dns>
   <dnsmasq:options xmlns:dnsmasq='http://libvirt.org/schemas/network/dnsmasq/1.0'>
-    <!-- Wildcard for apps -->
     <dnsmasq:option value='address=/apps.{{ clustername }}.{{ basedomain }}/{{ master0ip.stdout_lines | first }}'/>
   </dnsmasq:options>
   <ip address='{{ master0ip.stdout_lines | first | regex_replace("^([0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$", "\\1.1") }}' netmask='255.255.255.0'>
