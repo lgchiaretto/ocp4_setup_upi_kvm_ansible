@@ -1,0 +1,60 @@
+---
+# Create initial dedicated network (before VMs exist)
+# This network has basic DHCP only, will be updated later with DNS entries
+
+- name: Generate initial libvirt network XML for 3-node cluster
+  ansible.builtin.template:
+    src: "libvirt-network-3node-initial.xml.j2"
+    dest: "{{ clusters_dir }}/{{ clustername }}/{{ ocp_network_name }}-initial.xml"
+    mode: '0644'
+  when: sno == "false"
+
+- name: Generate initial libvirt network XML for SNO cluster
+  ansible.builtin.template:
+    src: "libvirt-network-sno-initial.xml.j2"
+    dest: "{{ clusters_dir }}/{{ clustername }}/{{ ocp_network_name }}-initial.xml"
+    mode: '0644'
+  when: sno == "true"
+
+- name: Check if network already exists
+  ansible.builtin.shell: "virsh net-list --all | grep -w {{ ocp_network_name }} || true"
+  register: network_exists
+  become: true
+  changed_when: false
+
+- name: Check if network is active
+  ansible.builtin.shell: "virsh net-info {{ ocp_network_name }} 2>/dev/null | grep 'Active:' | awk '{print $2}' || echo 'no'"
+  register: network_active
+  become: true
+  changed_when: false
+  when: network_exists.stdout != ""
+
+- name: Destroy network if active
+  ansible.builtin.shell: "virsh net-destroy {{ ocp_network_name }}"
+  become: true
+  when:
+    - network_exists.stdout != ""
+    - network_active.stdout == "yes"
+  ignore_errors: true
+
+- name: Undefine existing network
+  ansible.builtin.shell: "virsh net-undefine {{ ocp_network_name }}"
+  become: true
+  when: network_exists.stdout != ""
+  ignore_errors: true
+
+- name: Define initial network
+  ansible.builtin.shell: "virsh net-define {{ clusters_dir }}/{{ clustername }}/{{ ocp_network_name }}-initial.xml"
+  become: true
+
+- name: Start network
+  ansible.builtin.shell: "virsh net-start {{ ocp_network_name }}"
+  become: true
+
+- name: Set network to autostart
+  ansible.builtin.shell: "virsh net-autostart {{ ocp_network_name }}"
+  become: true
+
+- name: Display initial network creation
+  ansible.builtin.debug:
+    msg: "Initial dedicated network {{ ocp_network_name }} created and ready for VMs"
