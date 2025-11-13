@@ -160,16 +160,39 @@
     - ocp_cluster_use_dedicated_network | default(true) | bool
     - cluster_network_gateway.stdout not in (current_dns_servers.stdout | default(''))
 
+- name: Configure dnsmasq to forward cluster DNS queries
+  ansible.builtin.copy:
+    content: |
+      # Forward DNS queries for {{ clustername }}.{{ basedomain }} to cluster DNS server
+      server=/{{ clustername }}.{{ basedomain }}/{{ cluster_network_gateway.stdout }}
+      # Forward reverse DNS queries for cluster network
+      server=/{{ cluster_network_base.split('.')[::-1] | join('.') }}.in-addr.arpa/{{ cluster_network_gateway.stdout }}
+    dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
+    mode: '0644'
+  become: true
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
+- name: Reload NetworkManager to apply dnsmasq configuration
+  ansible.builtin.systemd:
+    name: NetworkManager
+    state: reloaded
+  become: true
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
 - name: Save NetworkManager connection name for cleanup
   ansible.builtin.copy:
     content: |
       nm_connection: {{ active_connection.stdout }}
       cluster_dns_server: {{ cluster_network_gateway.stdout }}
+      dnsmasq_config: /etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf
     dest: "{{ clusters_dir }}/{{ clustername }}/.nm_config"
     mode: '0644'
   when: ocp_cluster_use_dedicated_network | default(true) | bool
 
 - name: Display DNS configuration status
   ansible.builtin.debug:
-    msg: "DNS nameserver {{ cluster_network_gateway.stdout }} added to NetworkManager connection '{{ active_connection.stdout }}'"
+    msg: |
+      DNS configuration completed:
+      - Nameserver {{ cluster_network_gateway.stdout }} added to NetworkManager connection '{{ active_connection.stdout }}'
+      - Dnsmasq configured to forward {{ clustername }}.{{ basedomain }} queries to {{ cluster_network_gateway.stdout }}
   when: ocp_cluster_use_dedicated_network | default(true) | bool

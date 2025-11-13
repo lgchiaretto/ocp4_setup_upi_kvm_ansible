@@ -117,10 +117,33 @@
   ansible.builtin.set_fact:
     cleanup_nm_connection: "{{ (nm_config_content.content | b64decode | regex_search('nm_connection: (.+)', '\\1'))[0] }}"
     cleanup_dns_server: "{{ (nm_config_content.content | b64decode | regex_search('cluster_dns_server: (.+)', '\\1'))[0] }}"
+    cleanup_dnsmasq_config: "{{ (nm_config_content.content | b64decode | regex_search('dnsmasq_config: (.+)', '\\1'))[0] | default('') }}"
   when:
     - ocp_cluster_use_dedicated_network | default(true) | bool
     - nm_config_file.stat.exists | default(false)
     - nm_config_content is defined
+
+- name: Remove dnsmasq configuration for cluster
+  ansible.builtin.file:
+    path: "{{ cleanup_dnsmasq_config }}"
+    state: absent
+  become: true
+  when:
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - cleanup_dnsmasq_config is defined
+    - cleanup_dnsmasq_config != ''
+  ignore_errors: true
+
+- name: Reload NetworkManager to remove dnsmasq configuration
+  ansible.builtin.systemd:
+    name: NetworkManager
+    state: reloaded
+  become: true
+  when:
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - cleanup_dnsmasq_config is defined
+    - cleanup_dnsmasq_config != ''
+  ignore_errors: true
 
 - name: Remove cluster DNS nameserver from NetworkManager connection
   ansible.builtin.shell: "nmcli connection modify '{{ cleanup_nm_connection }}' -ipv4.dns '{{ cleanup_dns_server }}'"
