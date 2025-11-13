@@ -162,15 +162,20 @@
       server=/{{ clustername }}.{{ basedomain }}/{{ cluster_network_gateway.stdout }}
     dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}-cluster.conf"
     mode: '0644'
+    force: true
   become: true
   when: ocp_cluster_use_dedicated_network | default(true) | bool
+  register: dnsmasq_config_changed
 
 - name: Reload NetworkManager to apply dnsmasq configuration
   ansible.builtin.systemd:
     name: NetworkManager
     state: reloaded
   become: true
-  when: ocp_cluster_use_dedicated_network | default(true) | bool
+  when:
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - dnsmasq_config_changed is defined
+    - dnsmasq_config_changed.changed | default(false)
 
 - name: Save NetworkManager connection info for cleanup
   ansible.builtin.copy:
