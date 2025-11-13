@@ -4,12 +4,16 @@ ocpversion: 4.16.16
 clusters_dir: "/labs"
 sno: 'true'
 destroy_if_exists: 'true'
+
+# Network configuration
+# kvmnetwork: only used when ocp_cluster_use_dedicated_network=false
+# When ocp_cluster_use_dedicated_network=true, a new network <clustername>-net is created
 kvmnetwork: 'default'
 
-# Use libvirt network with integrated DNS (recommended) - set to true to enable
-# This eliminates the need for NetworkManager dnsmasq configuration
-# When enabled, DNS is configured directly in the libvirt network (like Terraform approach)
-ocp_cluster_use_libvirt_network_dns: false
+# Create dedicated network per cluster (recommended)
+# true: creates <clustername>-net (automatically cleaned up on destroy)
+# false: uses kvmnetwork above (user-managed, not removed on destroy)
+ocp_cluster_use_dedicated_network: true
 
 worker_mem: '4096'
 worker_cpu: 4

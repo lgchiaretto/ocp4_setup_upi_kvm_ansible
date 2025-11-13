@@ -3,7 +3,7 @@
 - name: Define bootstrap
   ansible.builtin.command: virt-install --name {{ clustername }}-bootstrap \
         --disk {{ clusters_dir }}/{{ clustername }}/bootstrap.qcow2,bus=virtio,size=120 \
-        --ram "16000" --cpu host --vcpus "8" --os-variant rhel9-unknown --pxe --network network={{ kvmnetwork }},model=virtio \
+        --ram "16000" --cpu host --vcpus "8" --os-variant rhel9-unknown --pxe --network network={{ ocp_network_name }},model=virtio \
         --location rhcos-install/ --noautoconsole \
         --extra-args 'nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=vda \
         coreos.live.rootfs_url=http://{{ lbvip.stdout_lines | first }}:1234/rhcos-live-rootfs.x86_64.img \
@@ -33,7 +33,7 @@
         --disk {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-extra-disk-{{ i }}.qcow2,bus=virtio,size={{ extra_disk_size }} \
         {% endfor %}
         --boot hd,cdrom --check path_in_use=off --noreboot --noautoconsole \
-        --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio
+        --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9-unknown --network network={{ ocp_network_name }},model=virtio
   register: createnodes
   become: true
   args:
@@ -53,7 +53,7 @@
 - name: Define KVM masters on 3 node cluster
   ansible.builtin.command: virt-install --name {{ clustername }}-{{ item }} \
         --disk {{ clusters_dir }}/{{ clustername }}/{{ item}}.qcow2,bus=virtio,size=120 \
-        --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9-unknown --pxe --network network={{ kvmnetwork }},model=virtio \
+        --ram "{{ master_mem }}" --cpu host --vcpus "{{ master_cpu }}" --os-variant rhel9-unknown --pxe --network network={{ ocp_network_name }},model=virtio \
         --location rhcos-install/ --noautoconsole \
         --extra-args 'nomodeset rd.neednet=1 coreos.inst=yes coreos.inst.install_dev=vda \
         coreos.live.rootfs_url=http://{{ lbvip.stdout_lines | first }}:1234/rhcos-live-rootfs.x86_64.img \

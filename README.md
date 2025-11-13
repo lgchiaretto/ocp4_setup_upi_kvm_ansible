@@ -13,7 +13,8 @@ Automated OpenShift cluster deployment on KVM using Ansible. Supports both **Sin
 - ✅ **OpenShift Data Foundation (ODF)** integration
 - ✅ **OpenShift Virtualization** support
 - ✅ **Modular Ansible structure** for better maintainability
-- ✅ **Automated DNS/DHCP** configuration
+- ✅ **Isolated libvirt networks** with integrated DNS/DHCP per cluster
+- ✅ **Automatic network cleanup** on cluster destroy
 - ✅ **HTPasswd authentication** setup
 - ✅ **Day 2 operations** (add workers, storage)
 
@@ -28,12 +29,9 @@ Automated OpenShift cluster deployment on KVM using Ansible. Supports both **Sin
 
 ## ⚠️ Important Notice
 
-**Please exercise caution** when running this playbook, as it modifies network settings. Ensure you:
-- Understand the changes being made
-- Have appropriate backups or recovery plans
-- Do not use in production
+**Network Configuration**: This automation creates isolated libvirt networks with integrated DNS/DHCP. By default, each cluster gets a dedicated network (`<clustername>-net`) that is automatically removed when the cluster is destroyed. When using shared networks, the original configuration is backed up and restored on cleanup.
 
-Running without careful review may lead to connectivity issues.
+Running this automation is safe and reversible - all changes are contained within libvirt networks.
 
 ## 🖥️ Tested Environments
 
@@ -147,8 +145,13 @@ Edit `ansible-vars-kvm.yaml` with your configuration. Get the pull secret from [
 
 | Variable | Example | Description |
 |----------|---------|-------------|
-| `kvmnetwork` | `default` | KVM network name |
+| `ocp_cluster_use_dedicated_network` | `true` | Create dedicated network per cluster (recommended). When `true`, creates `<clustername>-net` network automatically removed on destroy. When `false`, uses existing network specified by `kvmnetwork` |
+| `kvmnetwork` | `default` | KVM network name (only used when `ocp_cluster_use_dedicated_network: false`) |
 | `local_quay_registry` | `''` | Local registry URL (optional) |
+
+**Network Modes:**
+- **Dedicated Network (default)**: Each cluster gets isolated `<clustername>-net` network with automatic cleanup on destroy
+- **Shared Network**: Use existing libvirt network, backed up and restored on destroy
 
 ### Configuration Examples
 

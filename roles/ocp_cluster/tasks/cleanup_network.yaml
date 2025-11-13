@@ -1,0 +1,103 @@
+---
+# Cleanup network configuration
+
+# Set network name to determine what to clean
+- name: Set network name (dedicated network)
+  ansible.builtin.set_fact:
+    ocp_network_name: "{{ clustername }}-net"
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
+- name: Set network name (user-provided network)
+  ansible.builtin.set_fact:
+    ocp_network_name: "{{ kvmnetwork }}"
+  when: not (ocp_cluster_use_dedicated_network | default(true) | bool)
+
+# Check if network exists
+- name: Check if network exists
+  ansible.builtin.shell: "virsh net-list --all | grep -w {{ ocp_network_name }} || true"
+  register: network_exists
+  become: true
+  changed_when: false
+
+# Cleanup dedicated network (created by automation)
+- name: Check if dedicated network is active
+  ansible.builtin.shell: "virsh net-info {{ ocp_network_name }} 2>/dev/null | grep 'Active:' | awk '{print $2}' || echo 'no'"
+  register: network_active
+  become: true
+  changed_when: false
+  when:
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - network_exists.stdout != ""
+
+- name: Destroy dedicated network if active
+  ansible.builtin.shell: "virsh net-destroy {{ ocp_network_name }}"
+  become: true
+  when:
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - network_exists.stdout != ""
+    - network_active.stdout == "yes"
+  ignore_errors: true
+
+- name: Undefine dedicated network
+  ansible.builtin.shell: "virsh net-undefine {{ ocp_network_name }}"
+  become: true
+  when:
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - network_exists.stdout != ""
+
+- name: Remove dedicated network XML file
+  ansible.builtin.file:
+    path: "{{ clusters_dir }}/{{ clustername }}/{{ ocp_network_name }}-config.xml"
+    state: absent
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
+# Restore original user-provided network (if backup exists)
+- name: Check if network backup exists
+  ansible.builtin.stat:
+    path: "{{ clusters_dir }}/{{ clustername }}/{{ kvmnetwork }}-original.xml"
+  register: network_backup
+  when: not (ocp_cluster_use_dedicated_network | default(true) | bool)
+
+- name: Restore original network configuration
+  block:
+    - name: Check if user network is active
+      ansible.builtin.shell: "virsh net-info {{ kvmnetwork }} 2>/dev/null | grep 'Active:' | awk '{print $2}' || echo 'no'"
+      register: user_network_active
+      become: true
+      changed_when: false
+
+    - name: Destroy user network if active
+      ansible.builtin.shell: "virsh net-destroy {{ kvmnetwork }}"
+      become: true
+      when: user_network_active.stdout == "yes"
+      ignore_errors: true
+
+    - name: Undefine user network
+      ansible.builtin.shell: "virsh net-undefine {{ kvmnetwork }}"
+      become: true
+      ignore_errors: true
+
+    - name: Restore original network definition
+      ansible.builtin.shell: "virsh net-define {{ clusters_dir }}/{{ clustername }}/{{ kvmnetwork }}-original.xml"
+      become: true
+
+    - name: Start restored network
+      ansible.builtin.shell: "virsh net-start {{ kvmnetwork }}"
+      become: true
+
+    - name: Set restored network to autostart
+      ansible.builtin.shell: "virsh net-autostart {{ kvmnetwork }}"
+      become: true
+
+    - name: Remove network backup file
+      ansible.builtin.file:
+        path: "{{ clusters_dir }}/{{ clustername }}/{{ kvmnetwork }}-original.xml"
+        state: absent
+
+  when:
+    - not (ocp_cluster_use_dedicated_network | default(true) | bool)
+    - network_backup.stat.exists
+
+- name: Cleanup network complete
+  ansible.builtin.debug:
+    msg: "Network cleanup completed for {{ 'dedicated network ' + ocp_network_name if (ocp_cluster_use_dedicated_network | default(true) | bool) else 'user-provided network (restored from backup)' }}"

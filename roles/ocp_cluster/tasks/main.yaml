@@ -1,5 +1,17 @@
 ---
 # Main task file for OCP cluster setup
+
+# Set network name early for use throughout deployment
+- name: Set network name (dedicated network)
+  ansible.builtin.set_fact:
+    ocp_network_name: "{{ clustername }}-net"
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
+- name: Set network name (user-provided network)
+  ansible.builtin.set_fact:
+    ocp_network_name: "{{ kvmnetwork }}"
+  when: not (ocp_cluster_use_dedicated_network | default(true) | bool)
+
 - name: Validate OCP version and dependencies
   ansible.builtin.include_tasks: validate.yaml
 

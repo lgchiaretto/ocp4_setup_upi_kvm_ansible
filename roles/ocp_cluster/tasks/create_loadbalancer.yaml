@@ -27,7 +27,7 @@
 
 - name: Define and start LB
   ansible.builtin.command: virt-install --import --name {{ clustername }}-lb --disk "lb.qcow2" \
-                          --memory 1024 --cpu host --vcpus 4 --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio \
+                          --memory 1024 --cpu host --vcpus 4 --os-variant rhel9-unknown --network network={{ ocp_network_name }},model=virtio \
                           --noautoconsole --autostart
   register: definelb
   become: true

@@ -3,90 +3,11 @@
 - name: Wait for master VMs to get IP addresses
   ansible.builtin.include_tasks: wait_for_vm_ips.yaml
 
-# New method: Configure DNS directly in libvirt network (recommended)
 - name: Configure libvirt network with integrated DNS
   ansible.builtin.include_tasks: configure_libvirt_network.yaml
-  when: ocp_cluster_use_libvirt_network_dns | default(false) | bool
 
-# Legacy method: Configure DNS via NetworkManager dnsmasq
-- name: Create cluster network conf on dnsmasq when SNO (legacy method)
-  ansible.builtin.template:
-    src: "cluster-network.conf-sno.j2"
-    dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
-    mode: '0644'
-    selevel: s0
-    serole: object_r
-    setype: dnsmasq_etc_t
-    seuser: system_u
-  register: dnsmasq
-  become: true
-  when: 
-    - sno == "true"
-    - not (ocp_cluster_use_libvirt_network_dns | default(false) | bool)
-
-- name: Create cluster network conf on dnsmasq when not SNO (legacy method)
-  ansible.builtin.template:
-    src: "cluster-network.conf-sno.j2"
-    dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
-    mode: '0644'
-    selevel: s0
-    serole: object_r
-    setype: dnsmasq_etc_t
-    seuser: system_u
-  register: dnsmasq
-  become: true
-  when: sno == "true"
-
-- name: Create cluster network conf on dnsmasq when not SNO (legacy method)
-  ansible.builtin.template:
-    src: "cluster-network.conf.j2"
-    dest: "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
-    mode: '0644'
-    selevel: s0
-    serole: object_r
-    setype: dnsmasq_etc_t
-    seuser: system_u
-  register: dnsmasqconf
-  become: true
-  when: 
-    - sno == "false"
-    - not (ocp_cluster_use_libvirt_network_dns | default(false) | bool)
-
-- name: Create addnhosts file when not SNO (legacy method)
-  ansible.builtin.template:
-    src: "dnsmasq.openshift.addnhosts.j2"
-    dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
-    mode: '0644'
-  register: addnhosts
-  become: true
-  when: 
-    - sno == "false"
-    - not (ocp_cluster_use_libvirt_network_dns | default(false) | bool)
-
-- name: Create addnhosts file when SNO (legacy method)
-  ansible.builtin.template:
-    src: "dnsmasq.openshift.addnhosts-sno.j2"
-    dest: "/etc/dnsmasq.{{ clustername }}.addnhosts"
-    mode: '0644'
-  register: addnhosts
-  become: true
-  when: 
-    - sno == "true"
-    - not (ocp_cluster_use_libvirt_network_dns | default(false) | bool)
-
-- name: Restart Network Manager when configuring dnsmasq (legacy method)
-  ansible.builtin.service:
-    name: NetworkManager
-    state: restarted
-  become: true
-  when: not (ocp_cluster_use_libvirt_network_dns | default(false) | bool)
-
-- name: Restart libvirt when configuring dnsmasq
+- name: Restart libvirt after network configuration
   ansible.builtin.service:
     name: libvirtd
     state: restarted
   become: true
-
-- name: Configure DHCP reservations (legacy method only)
-  ansible.builtin.include_tasks: configure_dhcp.yaml
-  when: not (ocp_cluster_use_libvirt_network_dns | default(false) | bool)

@@ -1,8 +1,10 @@
 ---
 ocp_cluster_mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
 
-# Use libvirt network with integrated DNS (recommended) or NetworkManager dnsmasq (legacy)
-ocp_cluster_use_libvirt_network_dns: true
+# Network configuration
+# If true, creates a dedicated network named <clustername>-net (automatically cleaned up on destroy)
+# If false, uses the kvmnetwork specified by the user (not removed on destroy)
+ocp_cluster_use_dedicated_network: true
 
 ocp_cluster_python_packages:
   - kubernetes

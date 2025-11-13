@@ -28,13 +28,13 @@
   ignore_errors: true
   become: true
 
-- name: Delete all network files
+- name: Cleanup network configuration
+  ansible.builtin.include_tasks: cleanup_network.yaml
+  when: allvms | length > 0
+
+- name: Delete cluster directory
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ clusters_dir }}/{{ clustername }}/"
     state: absent
   register: deletefiles
-  with_items:
-    - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
-    - "/etc/dnsmasq.{{ clustername }}.addnhosts"
-    - "/{{ clusters_dir }}/{{ clustername }}/"
   become: true

@@ -5,7 +5,7 @@
         --disk {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-worker-{{ item }}.qcow2,bus=virtio,size=120 \
         --disk {{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso,device=cdrom \
         --boot hd,cdrom --check path_in_use=off --noautoconsole \
-        --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9-unknown --network network={{ kvmnetwork }},model=virtio \
+        --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9-unknown --network network={{ ocp_network_name }},model=virtio \
   register: createworkers
   args:
     chdir: "{{ clusters_dir }}/{{ clustername }}"
@@ -20,7 +20,7 @@
         --disk {{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso,device=cdrom \
         --boot hd,cdrom --check path_in_use=off --noautoconsole \
         --ram {{ worker_mem }} --cpu host --vcpus {{ worker_cpu }} --os-variant rhel9-unknown \
-        --network network={{ kvmnetwork }},model=virtio --network bridge=br1,model=virtio \
+        --network network={{ ocp_network_name }},model=virtio --network bridge=br1,model=virtio \
   register: createworkers
   args:
     chdir: "{{ clusters_dir }}/{{ clustername }}"

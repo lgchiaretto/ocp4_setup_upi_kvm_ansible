@@ -1,70 +1,117 @@
 ---
 # Configure libvirt network with integrated DNS
-- name: Get current kvmnetwork XML configuration
+
+# Determine which network to use
+- name: Set network name (dedicated network)
+  ansible.builtin.set_fact:
+    ocp_network_name: "{{ clustername }}-net"
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
+- name: Set network name (user-provided network)
+  ansible.builtin.set_fact:
+    ocp_network_name: "{{ kvmnetwork }}"
+  when: not (ocp_cluster_use_dedicated_network | default(true) | bool)
+
+# Backup existing network configuration if using user-provided network
+- name: Check if user-provided network exists
+  ansible.builtin.shell: "virsh net-list --all | grep -w {{ kvmnetwork }} || true"
+  register: network_check
+  become: true
+  changed_when: false
+  when: not (ocp_cluster_use_dedicated_network | default(true) | bool)
+
+- name: Get current network XML configuration (user-provided network)
   ansible.builtin.shell: "virsh net-dumpxml {{ kvmnetwork }}"
   register: current_network_xml
   become: true
   changed_when: false
+  when:
+    - not (ocp_cluster_use_dedicated_network | default(true) | bool)
+    - network_check.stdout != ""
 
-- name: Save original network configuration as backup
+- name: Save original network configuration as backup (user-provided network)
   ansible.builtin.copy:
     content: "{{ current_network_xml.stdout }}"
     dest: "{{ clusters_dir }}/{{ clustername }}/{{ kvmnetwork }}-original.xml"
     mode: '0644'
+  when:
+    - not (ocp_cluster_use_dedicated_network | default(true) | bool)
+    - network_check.stdout != ""
 
+# Generate network XML configuration
 - name: Generate libvirt network XML for 3-node cluster
   ansible.builtin.template:
     src: "libvirt-network-3node.xml.j2"
-    dest: "{{ clusters_dir }}/{{ clustername }}/{{ clustername }}-network.xml"
+    dest: "{{ clusters_dir }}/{{ clustername }}/{{ ocp_network_name }}-config.xml"
     mode: '0644'
   when: sno == "false"
 
 - name: Generate libvirt network XML for SNO cluster
   ansible.builtin.template:
     src: "libvirt-network-sno.xml.j2"
-    dest: "{{ clusters_dir }}/{{ clustername }}/{{ clustername }}-network.xml"
+    dest: "{{ clusters_dir }}/{{ clustername }}/{{ ocp_network_name }}-config.xml"
     mode: '0644'
   when: sno == "true"
 
-- name: Check if kvmnetwork is active
-  ansible.builtin.shell: "virsh net-info {{ kvmnetwork }} | grep 'Active:' | awk '{print $2}'"
-  register: network_active
+# Check if network exists and is active
+- name: Check if network exists
+  ansible.builtin.shell: "virsh net-list --all | grep -w {{ ocp_network_name }} || true"
+  register: network_exists
   become: true
   changed_when: false
 
-- name: Destroy kvmnetwork if active
-  ansible.builtin.shell: "virsh net-destroy {{ kvmnetwork }}"
+- name: Check if network is active
+  ansible.builtin.shell: "virsh net-info {{ ocp_network_name }} 2>/dev/null | grep 'Active:' | awk '{print $2}' || echo 'no'"
+  register: network_active
   become: true
-  when: network_active.stdout == "yes"
+  changed_when: false
+  when: network_exists.stdout != ""
 
-- name: Undefine kvmnetwork
-  ansible.builtin.shell: "virsh net-undefine {{ kvmnetwork }}"
+# Manage network lifecycle
+- name: Destroy network if active
+  ansible.builtin.shell: "virsh net-destroy {{ ocp_network_name }}"
+  become: true
+  when:
+    - network_exists.stdout != ""
+    - network_active.stdout == "yes"
+  ignore_errors: true
+
+- name: Undefine existing network
+  ansible.builtin.shell: "virsh net-undefine {{ ocp_network_name }}"
+  become: true
+  when: network_exists.stdout != ""
+  ignore_errors: true
+
+- name: Define network with DNS configuration
+  ansible.builtin.shell: "virsh net-define {{ clusters_dir }}/{{ clustername }}/{{ ocp_network_name }}-config.xml"
   become: true
 
-- name: Define kvmnetwork with new DNS configuration
-  ansible.builtin.shell: "virsh net-define {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-network.xml"
+- name: Start network
+  ansible.builtin.shell: "virsh net-start {{ ocp_network_name }}"
   become: true
 
-- name: Start kvmnetwork
-  ansible.builtin.shell: "virsh net-start {{ kvmnetwork }}"
+- name: Set network to autostart
+  ansible.builtin.shell: "virsh net-autostart {{ ocp_network_name }}"
   become: true
 
-- name: Set kvmnetwork to autostart
-  ansible.builtin.shell: "virsh net-autostart {{ kvmnetwork }}"
-  become: true
-
+# Get network information
 - name: Get network gateway IP for DNS
   ansible.builtin.shell: |
-    virsh net-dumpxml {{ kvmnetwork }} | grep "ip address=" | sed -n "s/.*address='\([^']*\)'.*/\1/p"
+    virsh net-dumpxml {{ ocp_network_name }} | grep "ip address=" | sed -n "s/.*address='\([^']*\)'.*/\1/p"
   register: cluster_network_gateway
   become: true
   changed_when: false
 
-- name: Display network gateway for DNS configuration
+- name: Display network configuration summary
   ansible.builtin.debug:
     msg: |
-      Network configured with integrated DNS!
+      ======================================
+      Network Configuration Complete!
+      ======================================
+      Network name: {{ ocp_network_name }}
+      Network type: {{ 'Dedicated (auto-cleanup on destroy)' if (ocp_cluster_use_dedicated_network | default(true) | bool) else 'Shared (user-managed)' }}
       Gateway/DNS server: {{ cluster_network_gateway.stdout }}
-      To use this DNS from your host, add this to /etc/resolv.conf:
+      
+      To use this DNS from your host, add to /etc/resolv.conf:
       nameserver {{ cluster_network_gateway.stdout }}
-
+      ======================================

@@ -1,133 +1,290 @@
-# Configuração DNS via libvirt Network
+# Configuração de Rede Libvirt com DNS Integrado
 
 ## Visão Geral
 
-Esta automação agora suporta duas abordagens para configuração DNS:
+Esta automação configura DNS diretamente na rede libvirt, eliminando a necessidade de modificar o NetworkManager do host. A configuração é completamente isolada e pode ser facilmente revertida.
 
-### 1. **Método Novo (Recomendado)**: DNS integrado na rede libvirt
-- DNS configurado diretamente no XML da rede libvirt
-- Semelhante à abordagem do Terraform (issue #12)
-- Não requer modificações no NetworkManager do host
-- Mais isolado e reversível
-- Configuração totalmente contida na rede virtual
+## Tipos de Rede
 
-### 2. **Método Legado**: dnsmasq via NetworkManager
-- DNS configurado através do dnsmasq do NetworkManager no host
-- Método original da automação
-- Requer modificações no sistema do host
+### 1. **Rede Dedicada por Cluster (Padrão - Recomendado)**
+- Cria uma rede libvirt dedicada chamada `<clustername>-net`
+- DNS e DHCP configurados especificamente para o cluster
+- **Automaticamente removida** quando o cluster é destruído
+- Isolamento completo entre clusters
+- Não afeta outras redes ou clusters
 
-## Como Ativar o Novo Método
+### 2. **Rede Compartilhada (Avançado)**
+- Usa uma rede libvirt existente especificada por `kvmnetwork`
+- Reconfigura temporariamente a rede com DNS do cluster
+- Backup automático da configuração original
+- **Restaura configuração original** quando o cluster é destruído
+- Útil quando você precisa usar uma rede específica existente
 
-No arquivo `ansible-vars-kvm.yaml`, configure:
+## Configuração
+
+### Rede Dedicada (Padrão)
+
+No arquivo `ansible-vars-kvm.yaml`:
 
 ```yaml
-ocp_cluster_use_libvirt_network_dns: true
+clustername: 'my-cluster'
+basedomain: 'example.com'
+
+# Cria rede dedicada <clustername>-net (recomendado)
+ocp_cluster_use_dedicated_network: true
+
+# kvmnetwork não é usado quando dedicated network está ativo
+kvmnetwork: 'default'
 ```
 
-## O que o Novo Método Faz
+**Resultado**: Cria rede `my-cluster-net` automaticamente removida no destroy.
 
-Quando ativado (`ocp_cluster_use_libvirt_network_dns: true`):
+### Rede Compartilhada
 
-1. **Gera XML da rede libvirt** com configuração DNS embutida incluindo:
-   - Entradas DNS para masters (master-0, master-1, master-2)
-   - Entradas DNS para etcd (etcd-0, etcd-1, etcd-2)
-   - Entradas DNS para API (api, api-int)
-   - Entradas DNS para load balancer
-   - Entradas DNS para bootstrap
-   - Registros SRV para serviço etcd
-   - Wildcard DNS para `*.apps.<cluster>.<domain>`
-   - Reservas DHCP para todos os nós
+```yaml
+clustername: 'my-cluster'
+basedomain: 'example.com'
 
-2. **Atualiza a rede kvmnetwork** com a nova configuração DNS
+# Usa rede existente (avançado)
+ocp_cluster_use_dedicated_network: false
 
-3. **Não modifica** o NetworkManager ou dnsmasq do host
+# Nome da rede libvirt existente a ser usada
+kvmnetwork: 'default'
+```
 
-## Diferenças entre SNO e 3-node
+**Resultado**: Usa rede `default`, faz backup, reconfigura com DNS, restaura no destroy.
 
-### SNO (Single Node OpenShift)
-- 1 entrada etcd (etcd-0)
+## O que é Configurado
+
+### DNS (ambos os modos)
+
+**SNO (Single Node OpenShift):**
+- `<clustername>-master-0.<domain>` → Master IP
+- `etcd-0.<clustername>.<domain>` → Master IP
+- `api.<clustername>.<domain>` → Master IP
+- `api-int.<clustername>.<domain>` → Master IP
+- `*.apps.<clustername>.<domain>` → Master IP (wildcard)
 - 1 registro SRV para etcd
-- DNS aponta api/api-int para o master-0
-- Wildcard apps aponta para master-0
 
-### 3-node
-- 3 entradas etcd (etcd-0, etcd-1, etcd-2)
+**3-node:**
+- `<clustername>-master-{0,1,2}.<domain>` → Master IPs
+- `etcd-{0,1,2}.<clustername>.<domain>` → Master IPs
+- `api.<clustername>.<domain>` → Load Balancer IP
+- `api-int.<clustername>.<domain>` → Load Balancer IP
+- `*.apps.<clustername>.<domain>` → Load Balancer IP
+- `<clustername>-bootstrap.<domain>` → Bootstrap IP (temporário)
 - 3 registros SRV para etcd
-- DNS aponta api/api-int para load balancer
-- Wildcard apps aponta para load balancer
-- Inclui entrada DNS para bootstrap (temporária)
+
+### DHCP
+
+Reservas automáticas para:
+- Masters (todos)
+- Load Balancer (3-node apenas)
+- Bootstrap (3-node apenas, temporário)
+- Workers (quando adicionados posteriormente)
 
 ## Acessando o Cluster do Host
 
-Para resolver DNS do cluster a partir do host, adicione o gateway da rede libvirt ao `/etc/resolv.conf`:
+O gateway da rede libvirt atua como servidor DNS. Para resolver nomes do cluster a partir do host:
 
 ```bash
-# Obter o gateway da rede (será exibido durante a execução do playbook)
-virsh net-dumpxml <kvmnetwork> | grep "ip address=" | sed -n "s/.*address='\([^']*\)'.*/\1/p"
+# Obter o gateway/DNS da rede (exibido durante o playbook)
+virsh net-dumpxml <network-name> | grep "ip address=" | sed -n "s/.*address='\([^']*\)'.*/\1/p"
+
+# Para rede dedicada: <clustername>-net
+# Para rede compartilhada: valor de kvmnetwork
 
 # Adicionar ao /etc/resolv.conf
 echo "nameserver <gateway-ip>" | sudo tee -a /etc/resolv.conf
 ```
 
-Exemplo:
+**Exemplo:**
 ```bash
-nameserver 192.168.122.1
+# Rede dedicada
+$ virsh net-dumpxml my-cluster-net | grep "ip address=" | sed -n "s/.*address='\([^']*\)'.*/\1/p"
+192.168.124.1
+
+$ echo "nameserver 192.168.124.1" | sudo tee -a /etc/resolv.conf
 ```
+
+## Ciclo de Vida da Rede
+
+### Durante Criação do Cluster
+
+**Rede Dedicada:**
+1. Cria rede `<clustername>-net`
+2. Configura DNS com entradas do cluster
+3. Configura DHCP com reservas
+4. Inicia rede e define autostart
+5. VMs conectam à nova rede
+
+**Rede Compartilhada:**
+1. Faz backup da configuração XML da rede existente
+2. Para a rede existente
+3. Reconfigura com DNS do cluster
+4. Reinicia a rede
+5. VMs conectam à rede reconfigurada
+
+### Durante Destruição do Cluster
+
+**Rede Dedicada:**
+1. Para todas as VMs do cluster
+2. Para a rede `<clustername>-net`
+3. Remove definição da rede
+4. Remove arquivo XML da rede
+
+**Rede Compartilhada:**
+1. Para todas as VMs do cluster
+2. Para a rede compartilhada
+3. Restaura configuração original do backup
+4. Reinicia a rede
+5. Remove arquivo de backup
+
+## Vantagens
+
+### Rede Dedicada
+✅ **Isolamento Total**: Cada cluster tem sua própria rede  
+✅ **Cleanup Automático**: Rede removida com o cluster  
+✅ **Múltiplos Clusters**: Vários clusters simultaneamente sem conflitos  
+✅ **Seguro**: Não modifica redes existentes  
+✅ **Simples**: Configuração padrão funciona imediatamente
+
+### Rede Compartilhada
+✅ **Integração**: Usa rede existente com outras VMs  
+✅ **Reversível**: Restauração automática da configuração original  
+✅ **Flexível**: Controle total sobre a rede usada
 
 ## Compatibilidade
 
-- ✅ Funciona com SNO e 3-node
-- ✅ Suporta múltiplos clusters (cada um com seu próprio namespace DNS)
-- ✅ Compatível com OpenShift 4.x
-- ✅ Não interfere com outras redes libvirt
+- ✅ OpenShift 4.x (SNO e multi-node)
+- ✅ RHCOS (todas versões suportadas)
+- ✅ KVM/libvirt com suporte a dnsmasq options
+- ✅ Múltiplos clusters simultâneos (rede dedicada)
+- ✅ NetworkManager não é mais necessário
 
-## Vantagens do Novo Método
+## Estrutura de Arquivos
 
-1. **Isolamento**: Não modifica configurações do sistema host
-2. **Reversível**: Destruir o cluster remove toda a configuração DNS
-3. **Múltiplos clusters**: Cada cluster tem sua própria configuração DNS independente
-4. **Simplicidade**: Menos componentes envolvidos (sem dnsmasq do NetworkManager)
-5. **Padrão Terraform**: Segue o mesmo padrão do provider Terraform libvirt
-
-## Limitações
-
-- Workers precisam ser adicionados manualmente ao DNS (use `add-new-nodes.yaml`)
-- Requer libvirt com suporte a opções dnsmasq customizadas
-- A rede kvmnetwork será reconfigurada (backup automático criado)
+```
+/labs/<clustername>/
+├── <network-name>-config.xml    # Configuração XML da rede
+├── <kvmnetwork>-original.xml    # Backup (só rede compartilhada)
+├── install-config.yaml
+├── *.ign
+└── ...
+```
 
 ## Troubleshooting
 
-### DNS não está resolvendo do host
+### DNS não resolve do host
 
-Verifique se o gateway da rede está em `/etc/resolv.conf`:
+**Sintoma**: `nslookup api.<clustername>.<domain>` falha
+
+**Solução**:
 ```bash
-cat /etc/resolv.conf | grep $(virsh net-dumpxml <kvmnetwork> | grep "ip address=" | sed -n "s/.*address='\([^']*\)'.*/\1/p")
+# Verificar se o gateway está em /etc/resolv.conf
+cat /etc/resolv.conf
+
+# Obter gateway da rede
+virsh net-dumpxml <network-name> | grep "ip address="
+
+# Adicionar se não estiver presente
+echo "nameserver <gateway-ip>" | sudo tee -a /etc/resolv.conf
 ```
 
-### Verificar configuração DNS da rede
+### Rede não inicia
 
+**Sintoma**: `virsh net-start <network-name>` falha
+
+**Solução**:
 ```bash
-virsh net-dumpxml <kvmnetwork>
+# Verificar logs
+journalctl -xe | grep libvirt
+
+# Verificar conflito de endereços
+ip addr show
+
+# Verificar se a bridge já existe
+brctl show
+
+# Remover definição e recriar
+virsh net-undefine <network-name>
+virsh net-define /labs/<clustername>/<network-name>-config.xml
+virsh net-start <network-name>
 ```
 
-### Testar resolução DNS
+### VMs não obtêm IP
 
+**Sintoma**: VMs ficam sem endereço IP
+
+**Solução**:
 ```bash
-# Do host (se configurado o nameserver)
-nslookup api.<clustername>.<basedomain>
+# Verificar se DHCP está ativo na rede
+virsh net-dumpxml <network-name> | grep -A 5 dhcp
 
-# De dentro de um nó do cluster
-oc debug node/<node-name>
-chroot /host
-nslookup api.<clustername>.<basedomain>
+# Verificar se a VM está conectada à rede correta
+virsh domiflist <vm-name>
+
+# Reiniciar a rede
+virsh net-destroy <network-name>
+virsh net-start <network-name>
 ```
 
-## Restaurar Método Legado
+### Verificar Configuração
 
-Para voltar ao método antigo, configure:
+```bash
+# Ver configuração completa da rede
+virsh net-dumpxml <network-name>
+
+# Ver status
+virsh net-info <network-name>
+
+# Listar todas as redes
+virsh net-list --all
+
+# Ver IPs atribuídos
+virsh net-dhcp-leases <network-name>
+```
+
+## Migração de Clusters Existentes
+
+Se você tem clusters criados com a versão antiga (dnsmasq do NetworkManager), recomendamos:
+
+1. **Backup** da configuração atual
+2. **Destroy** o cluster antigo
+3. **Atualizar** para nova versão da automação
+4. **Recriar** o cluster (usa rede dedicada automaticamente)
+
+## Exemplos
+
+### Cluster SNO com Rede Dedicada
 
 ```yaml
-ocp_cluster_use_libvirt_network_dns: false
+clustername: 'sno-prod'
+basedomain: 'company.com'
+sno: 'true'
+ocp_cluster_use_dedicated_network: true
 ```
 
-E execute o playbook normalmente. A configuração via NetworkManager será aplicada.
+**Rede Criada**: `sno-prod-net`  
+**DNS**: `api.sno-prod.company.com` → master-0 IP  
+**Destruição**: Rede `sno-prod-net` removida automaticamente
+
+### 3-node com Rede Compartilhada
+
+```yaml
+clustername: 'prod-cluster'
+basedomain: 'company.com'
+sno: 'false'
+ocp_cluster_use_dedicated_network: false
+kvmnetwork: 'production'
+```
+
+**Rede Usada**: `production` (existente)  
+**Backup**: Criado em `/labs/prod-cluster/production-original.xml`  
+**Destruição**: Rede `production` restaurada do backup
+
+## Referências
+
+- [Libvirt Network XML Format](https://libvirt.org/formatnetwork.html)
+- [Dnsmasq Options](https://libvirt.org/formatnetwork.html#dnsmasq-options)
+- [OpenShift UPI Requirements](https://docs.openshift.com/container-platform/latest/installing/installing_bare_metal/installing-bare-metal.html)
