@@ -27,25 +27,20 @@
       ignore_errors: true
       changed_when: true
 
-    - name: Delete all network files
+    - name: Cleanup network configuration
+      ansible.builtin.include_role:
+        name: ocp_cluster
+        tasks_from: cleanup_network
+
+    - name: Delete cluster directory
+      ansible.builtin.file:
+        path: "{{ clusters_dir }}/{{ clustername }}/"
+        state: absent
+
+    - name: Delete obsolete files
       ansible.builtin.file:
         path: "{{ item }}"
         state: absent
-      register: deletefiles
       with_items:
-        - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
         - "/etc/dnsmasq.{{ clustername }}.addnhosts"
-        - "/{{ clusters_dir }}/{{ clustername }}/"
-
-    - name: Restart libvirt when configuring dnsmasq
-      ansible.builtin.service:
-        name: libvirtd
-        state: restarted
-      when: deletefiles.changed
-
-    - name: Restart NetworkManager when configuring dnsmasq
-      ansible.builtin.service:
-        name: NetworkManager
-        state: restarted
-      when: deletefiles.changed
 
