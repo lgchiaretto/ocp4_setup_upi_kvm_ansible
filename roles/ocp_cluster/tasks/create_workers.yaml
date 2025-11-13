@@ -69,7 +69,7 @@
 
 - name: Adding worker mac on DHCP
   community.libvirt.virt_net:
-    name: "{{ kvmnetwork }}"
+    name: "{{ ocp_network_name }}"
     command: modify
     xml: "<host mac='{{ mac_addresses[item | int ] | first }}' ip='{{ worker_ips[item | int] | first }}'/>"
   register: worker_info

@@ -38,12 +38,20 @@
 - name: Configure network and DNS
   ansible.builtin.include_tasks: configure_network.yaml
 
-- name: Create worker VMs (if needed)
+- name: Create worker VMs for 3-node clusters (if needed)
   ansible.builtin.include_tasks: create_workers.yaml
-  when: n_worker != 0
+  when:
+    - n_worker != 0
+    - sno == "false"
 
 - name: Install and wait for cluster
   ansible.builtin.include_tasks: install_cluster.yaml
+
+- name: Create worker VMs for SNO clusters (if needed) - after cluster install
+  ansible.builtin.include_tasks: create_workers.yaml
+  when:
+    - n_worker != 0
+    - sno == "true"
 
 - name: Configure authentication
   ansible.builtin.include_tasks: configure_auth.yaml
