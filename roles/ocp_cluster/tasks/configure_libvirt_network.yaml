@@ -126,27 +126,50 @@
       Gateway/DNS server: {{ cluster_network_gateway.stdout }}
       ======================================
 
-# Configure host DNS resolution
-- name: Backup original /etc/resolv.conf if not already backed up
-  ansible.builtin.copy:
-    src: /etc/resolv.conf
-    dest: /etc/resolv.conf.ocp-backup
-    remote_src: true
-    force: false
-    mode: '0644'
+# Configure host DNS resolution via NetworkManager
+- name: Get active network connection
+  ansible.builtin.shell: "nmcli -t -f NAME,DEVICE connection show --active | head -n 1 | cut -d: -f1"
+  register: active_connection
   become: true
+  changed_when: false
   when: ocp_cluster_use_dedicated_network | default(true) | bool
 
-- name: Add cluster DNS nameserver to /etc/resolv.conf
-  ansible.builtin.lineinfile:
-    path: /etc/resolv.conf
-    line: "nameserver {{ cluster_network_gateway.stdout }}"
-    insertbefore: BOF
-    state: present
+- name: Get current DNS servers from NetworkManager
+  ansible.builtin.shell: "nmcli -g ipv4.dns connection show '{{ active_connection.stdout }}' || echo ''"
+  register: current_dns_servers
   become: true
+  changed_when: false
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
+- name: Add cluster DNS nameserver to NetworkManager connection
+  ansible.builtin.shell: |
+    {% if current_dns_servers.stdout == '' %}
+    nmcli connection modify '{{ active_connection.stdout }}' ipv4.dns '{{ cluster_network_gateway.stdout }}'
+    {% else %}
+    nmcli connection modify '{{ active_connection.stdout }}' +ipv4.dns '{{ cluster_network_gateway.stdout }}'
+    {% endif %}
+  become: true
+  when: 
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - cluster_network_gateway.stdout not in (current_dns_servers.stdout | default(''))
+
+- name: Reload NetworkManager connection to apply DNS changes
+  ansible.builtin.shell: "nmcli connection up '{{ active_connection.stdout }}'"
+  become: true
+  when: 
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - cluster_network_gateway.stdout not in (current_dns_servers.stdout | default(''))
+
+- name: Save NetworkManager connection name for cleanup
+  ansible.builtin.copy:
+    content: |
+      nm_connection: {{ active_connection.stdout }}
+      cluster_dns_server: {{ cluster_network_gateway.stdout }}
+    dest: "{{ clusters_dir }}/{{ clustername }}/.nm_config"
+    mode: '0644'
   when: ocp_cluster_use_dedicated_network | default(true) | bool
 
 - name: Display DNS configuration status
   ansible.builtin.debug:
-    msg: "DNS nameserver {{ cluster_network_gateway.stdout }} added to /etc/resolv.conf"
+    msg: "DNS nameserver {{ cluster_network_gateway.stdout }} added to NetworkManager connection '{{ active_connection.stdout }}'"
   when: ocp_cluster_use_dedicated_network | default(true) | bool

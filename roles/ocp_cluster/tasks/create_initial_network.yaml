@@ -4,7 +4,7 @@
 
 - name: Generate random network octet (150-170) for this cluster
   ansible.builtin.set_fact:
-    cluster_network_octet: "{{ 150 | random(start=150, end=170) }}"
+    cluster_network_octet: "{{ range(150, 171) | random }}"
 
 - name: Set network base for dedicated network
   ansible.builtin.set_fact:

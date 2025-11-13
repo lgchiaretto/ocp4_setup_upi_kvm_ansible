@@ -98,32 +98,52 @@
     - not (ocp_cluster_use_dedicated_network | default(true) | bool)
     - network_backup.stat.exists
 
-# Remove DNS entry from /etc/resolv.conf
-- name: Load network configuration to get DNS IP
-  ansible.builtin.slurp:
-    src: "{{ clusters_dir }}/{{ clustername }}/.network_config"
-  register: cleanup_network_config
-  ignore_errors: true
+# Remove DNS entry from NetworkManager
+- name: Check if NetworkManager configuration file exists
+  ansible.builtin.stat:
+    path: "{{ clusters_dir }}/{{ clustername }}/.nm_config"
+  register: nm_config_file
   when: ocp_cluster_use_dedicated_network | default(true) | bool
 
-- name: Parse network base for DNS removal
-  ansible.builtin.set_fact:
-    cleanup_network_base: "{{ (cleanup_network_config.content | b64decode | regex_search('cluster_network_base: (.+)', '\\1'))[0] }}"
+- name: Load NetworkManager configuration
+  ansible.builtin.slurp:
+    src: "{{ clusters_dir }}/{{ clustername }}/.nm_config"
+  register: nm_config_content
   when:
     - ocp_cluster_use_dedicated_network | default(true) | bool
-    - cleanup_network_config is defined
-    - not cleanup_network_config.failed | default(false)
+    - nm_config_file.stat.exists | default(false)
 
-- name: Remove cluster DNS nameserver from /etc/resolv.conf
-  ansible.builtin.lineinfile:
-    path: /etc/resolv.conf
-    line: "nameserver {{ cleanup_network_base }}.1"
-    state: absent
+- name: Parse NetworkManager connection info
+  ansible.builtin.set_fact:
+    cleanup_nm_connection: "{{ (nm_config_content.content | b64decode | regex_search('nm_connection: (.+)', '\\1'))[0] }}"
+    cleanup_dns_server: "{{ (nm_config_content.content | b64decode | regex_search('cluster_dns_server: (.+)', '\\1'))[0] }}"
+  when:
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - nm_config_file.stat.exists | default(false)
+    - nm_config_content is defined
+
+- name: Remove cluster DNS nameserver from NetworkManager connection
+  ansible.builtin.shell: "nmcli connection modify '{{ cleanup_nm_connection }}' -ipv4.dns '{{ cleanup_dns_server }}'"
   become: true
   when:
     - ocp_cluster_use_dedicated_network | default(true) | bool
-    - cleanup_network_base is defined
+    - cleanup_nm_connection is defined
+    - cleanup_dns_server is defined
   ignore_errors: true
+
+- name: Reload NetworkManager connection to apply DNS removal
+  ansible.builtin.shell: "nmcli connection up '{{ cleanup_nm_connection }}'"
+  become: true
+  when:
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - cleanup_nm_connection is defined
+  ignore_errors: true
+
+- name: Remove NetworkManager configuration file
+  ansible.builtin.file:
+    path: "{{ clusters_dir }}/{{ clustername }}/.nm_config"
+    state: absent
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
 
 - name: Cleanup network complete
   ansible.builtin.debug:
