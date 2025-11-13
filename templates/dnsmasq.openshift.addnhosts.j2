@@ -1,7 +1,10 @@
 {{ bootstrapip.stdout_lines | first  }} {{ clustername }}-bootstrap.{{ basedomain }}
 {{ master0ip.stdout_lines | first  }} {{ clustername }}-master-0.{{ basedomain }}
+{{ master0ip.stdout_lines | first  }} etcd-0.{{ clustername }}.{{ basedomain }}
 {{ master1ip.stdout_lines | first  }} {{ clustername }}-master-1.{{ basedomain }}
+{{ master1ip.stdout_lines | first  }} etcd-1.{{ clustername }}.{{ basedomain }}
 {{ master2ip.stdout_lines | first  }} {{ clustername }}-master-2.{{ basedomain }}
+{{ master2ip.stdout_lines | first  }} etcd-2.{{ clustername }}.{{ basedomain }}
 {{ lbvip.stdout_lines | first  }} api.{{ clustername }}.{{ basedomain }}
 {{ lbvip.stdout_lines | first  }} api-int.{{ clustername }}.{{ basedomain }}
 {{ lbvip.stdout_lines | first  }} lb.{{ clustername }}.{{ basedomain }}

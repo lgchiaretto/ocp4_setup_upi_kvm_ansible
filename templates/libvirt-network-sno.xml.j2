@@ -1,0 +1,29 @@
+<network>
+  <name>{{ kvmnetwork }}</name>
+  <forward mode='nat'/>
+  <bridge name='br-{{ kvmnetwork }}' stp='on' delay='0'/>
+  <domain name='{{ clustername }}.{{ basedomain }}' localOnly='yes'/>
+  <dns enable='yes'>
+    <!-- Single master node -->
+    <host ip='{{ master0ip.stdout_lines | first }}'>
+      <hostname>{{ clustername }}-master-0.{{ basedomain }}</hostname>
+      <hostname>{{ clustername }}-master-0.{{ clustername }}.{{ basedomain }}</hostname>
+      <hostname>etcd-0.{{ clustername }}.{{ basedomain }}</hostname>
+      <hostname>api.{{ clustername }}.{{ basedomain }}</hostname>
+      <hostname>api-int.{{ clustername }}.{{ basedomain }}</hostname>
+    </host>
+    <!-- SRV record for etcd -->
+    <srv service='etcd-server-ssl' protocol='tcp' domain='{{ clustername }}.{{ basedomain }}' target='etcd-0.{{ clustername }}.{{ basedomain }}' port='2380' priority='0' weight='10'/>
+  </dns>
+  <dnsmasq:options xmlns:dnsmasq='http://libvirt.org/schemas/network/dnsmasq/1.0'>
+    <!-- Wildcard for apps -->
+    <dnsmasq:option value='address=/apps.{{ clustername }}.{{ basedomain }}/{{ master0ip.stdout_lines | first }}'/>
+  </dnsmasq:options>
+  <ip address='{{ master0ip.stdout_lines | first | regex_replace("^([0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$", "\\1.1") }}' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='{{ master0ip.stdout_lines | first | regex_replace("^([0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$", "\\1.100") }}' end='{{ master0ip.stdout_lines | first | regex_replace("^([0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$", "\\1.250") }}'/>
+      <!-- DHCP reservation for master -->
+      <host mac='{{ master0infosno.stdout }}' ip='{{ master0ip.stdout_lines | first }}'/>
+    </dhcp>
+  </ip>
+</network>

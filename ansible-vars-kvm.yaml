@@ -5,6 +5,12 @@ clusters_dir: "/labs"
 sno: 'true'
 destroy_if_exists: 'true'
 kvmnetwork: 'default'
+
+# Use libvirt network with integrated DNS (recommended) - set to true to enable
+# This eliminates the need for NetworkManager dnsmasq configuration
+# When enabled, DNS is configured directly in the libvirt network (like Terraform approach)
+ocp_cluster_use_libvirt_network_dns: false
+
 worker_mem: '4096'
 worker_cpu: 4
 n_worker: 0

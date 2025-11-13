@@ -1,0 +1,69 @@
+---
+# Configure libvirt network with integrated DNS
+- name: Get current kvmnetwork XML configuration
+  ansible.builtin.shell: "virsh net-dumpxml {{ kvmnetwork }}"
+  register: current_network_xml
+  become: true
+  changed_when: false
+
+- name: Save original network configuration as backup
+  ansible.builtin.copy:
+    content: "{{ current_network_xml.stdout }}"
+    dest: "{{ clusters_dir }}/{{ clustername }}/{{ kvmnetwork }}-original.xml"
+    mode: '0644'
+
+- name: Generate libvirt network XML for 3-node cluster
+  ansible.builtin.template:
+    src: "libvirt-network-3node.xml.j2"
+    dest: "{{ clusters_dir }}/{{ clustername }}/{{ clustername }}-network.xml"
+    mode: '0644'
+  when: sno == "false"
+
+- name: Generate libvirt network XML for SNO cluster
+  ansible.builtin.template:
+    src: "libvirt-network-sno.xml.j2"
+    dest: "{{ clusters_dir }}/{{ clustername }}/{{ clustername }}-network.xml"
+    mode: '0644'
+  when: sno == "true"
+
+- name: Check if kvmnetwork is active
+  ansible.builtin.shell: "virsh net-info {{ kvmnetwork }} | grep 'Active:' | awk '{print $2}'"
+  register: network_active
+  become: true
+  changed_when: false
+
+- name: Destroy kvmnetwork if active
+  ansible.builtin.shell: "virsh net-destroy {{ kvmnetwork }}"
+  become: true
+  when: network_active.stdout == "yes"
+
+- name: Undefine kvmnetwork
+  ansible.builtin.shell: "virsh net-undefine {{ kvmnetwork }}"
+  become: true
+
+- name: Define kvmnetwork with new DNS configuration
+  ansible.builtin.shell: "virsh net-define {{ clusters_dir }}/{{ clustername }}/{{ clustername }}-network.xml"
+  become: true
+
+- name: Start kvmnetwork
+  ansible.builtin.shell: "virsh net-start {{ kvmnetwork }}"
+  become: true
+
+- name: Set kvmnetwork to autostart
+  ansible.builtin.shell: "virsh net-autostart {{ kvmnetwork }}"
+  become: true
+
+- name: Get network gateway IP for DNS
+  ansible.builtin.shell: "virsh net-dumpxml {{ kvmnetwork }} | grep \"ip address=\" | sed -n 's/.*address='\\([^']*\\)'.*/\\1/p'"
+  register: cluster_network_gateway
+  become: true
+  changed_when: false
+
+- name: Display network gateway for DNS configuration
+  ansible.builtin.debug:
+    msg: |
+      Network configured with integrated DNS!
+      Gateway/DNS server: {{ cluster_network_gateway.stdout }}
+      To use this DNS from your host, add this to /etc/resolv.conf:
+      nameserver {{ cluster_network_gateway.stdout }}
+

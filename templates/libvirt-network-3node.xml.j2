@@ -1,0 +1,46 @@
+<network>
+  <name>{{ kvmnetwork }}</name>
+  <forward mode='nat'/>
+  <bridge name='br-{{ kvmnetwork }}' stp='on' delay='0'/>
+  <domain name='{{ clustername }}.{{ basedomain }}' localOnly='yes'/>
+  <dns enable='yes'>
+    <!-- Master nodes -->
+{% for i in range(3) %}
+    <host ip='{{ lookup("vars", "master" + i|string + "ip").stdout_lines | first }}'>
+      <hostname>{{ clustername }}-master-{{ i }}.{{ basedomain }}</hostname>
+      <hostname>{{ clustername }}-master-{{ i }}.{{ clustername }}.{{ basedomain }}</hostname>
+      <hostname>etcd-{{ i }}.{{ clustername }}.{{ basedomain }}</hostname>
+    </host>
+{% endfor %}
+    <!-- Load balancer -->
+    <host ip='{{ lbvip.stdout_lines | first }}'>
+      <hostname>api.{{ clustername }}.{{ basedomain }}</hostname>
+      <hostname>api-int.{{ clustername }}.{{ basedomain }}</hostname>
+      <hostname>lb.{{ clustername }}.{{ basedomain }}</hostname>
+    </host>
+    <!-- Bootstrap -->
+    <host ip='{{ bootstrapip.stdout_lines | first }}'>
+      <hostname>{{ clustername }}-bootstrap.{{ basedomain }}</hostname>
+      <hostname>{{ clustername }}-bootstrap.{{ clustername }}.{{ basedomain }}</hostname>
+    </host>
+    <!-- SRV records for etcd -->
+{% for i in range(3) %}
+    <srv service='etcd-server-ssl' protocol='tcp' domain='{{ clustername }}.{{ basedomain }}' target='etcd-{{ i }}.{{ clustername }}.{{ basedomain }}' port='2380' priority='0' weight='10'/>
+{% endfor %}
+  </dns>
+  <dnsmasq:options xmlns:dnsmasq='http://libvirt.org/schemas/network/dnsmasq/1.0'>
+    <!-- Wildcard for apps -->
+    <dnsmasq:option value='address=/apps.{{ clustername }}.{{ basedomain }}/{{ lbvip.stdout_lines | first }}'/>
+  </dnsmasq:options>
+  <ip address='{{ master0ip.stdout_lines | first | regex_replace("^([0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$", "\\1.1") }}' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='{{ master0ip.stdout_lines | first | regex_replace("^([0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$", "\\1.100") }}' end='{{ master0ip.stdout_lines | first | regex_replace("^([0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$", "\\1.250") }}'/>
+      <!-- DHCP reservations -->
+      <host mac='{{ lb_info.stdout }}' ip='{{ lbvip.stdout_lines | first }}'/>
+      <host mac='{{ bootstrapmac.stdout }}' ip='{{ bootstrapip.stdout_lines | first }}'/>
+{% for i in range(3) %}
+      <host mac='{{ lookup("vars", "master" + i|string + "info").stdout }}' ip='{{ lookup("vars", "master" + i|string + "ip").stdout_lines | first }}'/>
+{% endfor %}
+    </dhcp>
+  </ip>
+</network>
