@@ -1,6 +1,19 @@
 ---
 # Configure libvirt network with integrated DNS
 
+# Load network configuration if using dedicated network
+- name: Load network configuration for dedicated network
+  ansible.builtin.slurp:
+    src: "{{ clusters_dir }}/{{ clustername }}/.network_config"
+  register: network_config_file
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
+- name: Parse network configuration
+  ansible.builtin.set_fact:
+    cluster_network_octet: "{{ (network_config_file.content | b64decode | regex_search('cluster_network_octet: (.+)', '\\1'))[0] }}"
+    cluster_network_base: "{{ (network_config_file.content | b64decode | regex_search('cluster_network_base: (.+)', '\\1'))[0] }}"
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
 # Determine which network to use
 - name: Set network name (dedicated network)
   ansible.builtin.set_fact:
@@ -111,7 +124,29 @@
       Network name: {{ ocp_network_name }}
       Network type: {{ 'Dedicated (auto-cleanup on destroy)' if (ocp_cluster_use_dedicated_network | default(true) | bool) else 'Shared (user-managed)' }}
       Gateway/DNS server: {{ cluster_network_gateway.stdout }}
-      
-      To use this DNS from your host, add to /etc/resolv.conf:
-      nameserver {{ cluster_network_gateway.stdout }}
       ======================================
+
+# Configure host DNS resolution
+- name: Backup original /etc/resolv.conf if not already backed up
+  ansible.builtin.copy:
+    src: /etc/resolv.conf
+    dest: /etc/resolv.conf.ocp-backup
+    remote_src: true
+    force: false
+    mode: '0644'
+  become: true
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
+- name: Add cluster DNS nameserver to /etc/resolv.conf
+  ansible.builtin.lineinfile:
+    path: /etc/resolv.conf
+    line: "nameserver {{ cluster_network_gateway.stdout }}"
+    insertbefore: BOF
+    state: present
+  become: true
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
+- name: Display DNS configuration status
+  ansible.builtin.debug:
+    msg: "DNS nameserver {{ cluster_network_gateway.stdout }} added to /etc/resolv.conf"
+  when: ocp_cluster_use_dedicated_network | default(true) | bool

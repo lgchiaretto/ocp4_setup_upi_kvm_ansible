@@ -4,9 +4,9 @@
   <bridge name='virbr-{{ clustername[:8] }}' stp='on' delay='0'/>
   <domain name='{{ clustername }}.{{ basedomain }}' localOnly='yes'/>
   <dns enable='yes'/>
-  <ip address='192.168.123.1' netmask='255.255.255.0'>
+  <ip address='{{ cluster_network_base }}.1' netmask='255.255.255.0'>
     <dhcp>
-      <range start='192.168.123.100' end='192.168.123.250'/>
+      <range start='{{ cluster_network_base }}.100' end='{{ cluster_network_base }}.250'/>
     </dhcp>
   </ip>
 </network>

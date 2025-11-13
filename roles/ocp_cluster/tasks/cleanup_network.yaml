@@ -98,6 +98,33 @@
     - not (ocp_cluster_use_dedicated_network | default(true) | bool)
     - network_backup.stat.exists
 
+# Remove DNS entry from /etc/resolv.conf
+- name: Load network configuration to get DNS IP
+  ansible.builtin.slurp:
+    src: "{{ clusters_dir }}/{{ clustername }}/.network_config"
+  register: cleanup_network_config
+  ignore_errors: true
+  when: ocp_cluster_use_dedicated_network | default(true) | bool
+
+- name: Parse network base for DNS removal
+  ansible.builtin.set_fact:
+    cleanup_network_base: "{{ (cleanup_network_config.content | b64decode | regex_search('cluster_network_base: (.+)', '\\1'))[0] }}"
+  when:
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - cleanup_network_config is defined
+    - not cleanup_network_config.failed | default(false)
+
+- name: Remove cluster DNS nameserver from /etc/resolv.conf
+  ansible.builtin.lineinfile:
+    path: /etc/resolv.conf
+    line: "nameserver {{ cleanup_network_base }}.1"
+    state: absent
+  become: true
+  when:
+    - ocp_cluster_use_dedicated_network | default(true) | bool
+    - cleanup_network_base is defined
+  ignore_errors: true
+
 - name: Cleanup network complete
   ansible.builtin.debug:
     msg: "Network cleanup completed for {{ 'dedicated network ' + ocp_network_name if (ocp_cluster_use_dedicated_network | default(true) | bool) else 'user-provided network (restored from backup)' }}"

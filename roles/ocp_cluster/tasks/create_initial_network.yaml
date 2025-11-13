@@ -2,6 +2,26 @@
 # Create initial dedicated network (before VMs exist)
 # This network has basic DHCP only, will be updated later with DNS entries
 
+- name: Generate random network octet (150-170) for this cluster
+  ansible.builtin.set_fact:
+    cluster_network_octet: "{{ 150 | random(start=150, end=170) }}"
+
+- name: Set network base for dedicated network
+  ansible.builtin.set_fact:
+    cluster_network_base: "192.168.{{ cluster_network_octet }}"
+
+- name: Display assigned network range
+  ansible.builtin.debug:
+    msg: "Cluster {{ clustername }} assigned network range: {{ cluster_network_base }}.0/24"
+
+- name: Save network configuration for later use
+  ansible.builtin.copy:
+    content: |
+      cluster_network_octet: {{ cluster_network_octet }}
+      cluster_network_base: {{ cluster_network_base }}
+    dest: "{{ clusters_dir }}/{{ clustername }}/.network_config"
+    mode: '0644'
+
 - name: Generate initial libvirt network XML for 3-node cluster
   ansible.builtin.template:
     src: "libvirt-network-3node-initial.xml.j2"

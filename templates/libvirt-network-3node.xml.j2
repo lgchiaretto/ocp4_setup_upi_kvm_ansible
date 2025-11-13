@@ -32,9 +32,9 @@
     <!-- Wildcard for apps -->
     <dnsmasq:option value='address=/apps.{{ clustername }}.{{ basedomain }}/{{ lbvip.stdout_lines | first }}'/>
   </dnsmasq:options>
-  <ip address='{{ master0ip.stdout_lines | first | regex_replace("^([0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$", "\\1.1") }}' netmask='255.255.255.0'>
+  <ip address='{{ cluster_network_base }}.1' netmask='255.255.255.0'>
     <dhcp>
-      <range start='{{ master0ip.stdout_lines | first | regex_replace("^([0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$", "\\1.100") }}' end='{{ master0ip.stdout_lines | first | regex_replace("^([0-9]+\\.[0-9]+\\.[0-9]+)\\.[0-9]+$", "\\1.250") }}'/>
+      <range start='{{ cluster_network_base }}.100' end='{{ cluster_network_base }}.250'/>
       <!-- DHCP reservations -->
       <host mac='{{ lb_info.stdout }}' ip='{{ lbvip.stdout_lines | first }}'/>
       <host mac='{{ bootstrapmac.stdout }}' ip='{{ bootstrapip.stdout_lines | first }}'/>
