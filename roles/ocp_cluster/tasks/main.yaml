@@ -28,10 +28,13 @@
 - name: Prepare cluster directory and files
   ansible.builtin.include_tasks: prepare_cluster.yaml
 
+- name: Create libvirt network (before VMs)
+  ansible.builtin.include_tasks: configure_libvirt_network.yaml
+
 - name: Create and configure VMs
   ansible.builtin.include_tasks: create_vms.yaml
 
-- name: Configure network and DNS
+- name: Configure network and DNS (wait for IPs)
   ansible.builtin.include_tasks: configure_network.yaml
 
 - name: Create worker VMs (if needed)

@@ -3,11 +3,9 @@
 - name: Wait for master VMs to get IP addresses
   ansible.builtin.include_tasks: wait_for_vm_ips.yaml
 
-- name: Configure libvirt network with integrated DNS
-  ansible.builtin.include_tasks: configure_libvirt_network.yaml
-
-- name: Restart libvirt after network configuration
+- name: Restart libvirt after VMs are up
   ansible.builtin.service:
     name: libvirtd
     state: restarted
   become: true
+
