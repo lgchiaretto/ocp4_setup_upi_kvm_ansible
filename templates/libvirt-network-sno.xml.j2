@@ -1,7 +1,7 @@
 <network>
   <name>{{ ocp_network_name }}</name>
   <forward mode='nat'/>
-  <bridge name='br-{{ ocp_network_name }}' stp='on' delay='0'/>
+  <bridge name='virbr-{{ clustername[:8] }}' stp='on' delay='0'/>
   <domain name='{{ clustername }}.{{ basedomain }}' localOnly='yes'/>
   <dns enable='yes'>
     <!-- Single master node -->
