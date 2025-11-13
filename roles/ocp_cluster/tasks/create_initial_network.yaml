@@ -2,9 +2,35 @@
 # Create initial dedicated network (before VMs exist)
 # This network has basic DHCP only, will be updated later with DNS entries
 
-- name: Generate random network octet (150-170) for this cluster
+- name: Get list of existing networks with their IP ranges
+  ansible.builtin.shell: |
+    for net in $(virsh net-list --all --name); do
+      ip=$(virsh net-dumpxml $net 2>/dev/null | grep "ip address=" | sed -n "s/.*address='\([^']*\)'.*/\1/p" | head -1)
+      if [ -n "$ip" ]; then
+        echo "$ip" | cut -d. -f3
+      fi
+    done
+  register: existing_network_octets
+  become: true
+  changed_when: false
+
+- name: Generate random network octet (150-170) avoiding conflicts
+  ansible.builtin.shell: |
+    existing_octets="{{ existing_network_octets.stdout_lines | join(' ') }}"
+    for attempt in {1..50}; do
+      octet=$((150 + RANDOM % 21))
+      if ! echo "$existing_octets" | grep -qw "$octet"; then
+        echo "$octet"
+        exit 0
+      fi
+    done
+    echo "160"  # fallback if all attempts fail
+  register: random_octet
+  changed_when: false
+
+- name: Set cluster network octet
   ansible.builtin.set_fact:
-    cluster_network_octet: "{{ range(150, 171) | random }}"
+    cluster_network_octet: "{{ random_octet.stdout }}"
 
 - name: Set network base for dedicated network
   ansible.builtin.set_fact:
