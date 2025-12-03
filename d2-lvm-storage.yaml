@@ -44,9 +44,7 @@
 
     - name: Fail if no extra disks available
       ansible.builtin.fail:
-        msg: |
-          No extra disks found on master-0. LVM Storage requires at least one extra disk.
-          Please redeploy with extra_disks >= 1 in your configuration.
+        msg: "No extra disks found on master-0. LVM Storage requires at least one extra disk. Please redeploy with extra_disks >= 1 in your configuration."
       when: disk_devices.count <= 2
 
     - name: Display disk configuration
@@ -217,25 +215,25 @@
   post_tasks:
     - name: Display completion message
       ansible.builtin.debug:
-        msg: |
-          ============================================================
-          LVM Storage configured successfully!
-          ============================================================
-          
-          StorageClass: lvms-vg1
-          Disks: {{ extra_disks_list | join(', ') }}
-          
-          To use LVM storage in your applications:
-          
-          apiVersion: v1
-          kind: PersistentVolumeClaim
-          metadata:
-            name: my-pvc
-          spec:
-            accessModes:
-              - ReadWriteOnce
-            resources:
-              requests:
-                storage: 10Gi
-            storageClassName: lvms-vg1
-          ============================================================
+        msg:
+          - "============================================================"
+          - "LVM Storage configured successfully!"
+          - "============================================================"
+          - ""
+          - "StorageClass: lvms-vg1"
+          - "Disks: {{ extra_disks_list | join(', ') }}"
+          - ""
+          - "To use LVM storage in your applications:"
+          - ""
+          - "apiVersion: v1"
+          - "kind: PersistentVolumeClaim"
+          - "metadata:"
+          - "  name: my-pvc"
+          - "spec:"
+          - "  accessModes:"
+          - "    - ReadWriteOnce"
+          - "  resources:"
+          - "    requests:"
+          - "      storage: 10Gi"
+          - "  storageClassName: lvms-vg1"
+          - "============================================================"

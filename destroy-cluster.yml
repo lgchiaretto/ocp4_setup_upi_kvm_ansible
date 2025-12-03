@@ -21,15 +21,15 @@
 
     - name: Confirm cluster destruction
       ansible.builtin.debug:
-        msg: |
-          ============================================================
-          WARNING: Destroying cluster '{{ clustername }}'
-          ============================================================
-          This will remove:
-          - All VMs with '{{ clustername }}' in their name
-          - DNS/DHCP configuration
-          - Cluster directory: {{ clusters_dir }}/{{ clustername }}
-          ============================================================
+        msg:
+          - "============================================================"
+          - "WARNING: Destroying cluster '{{ clustername }}'"
+          - "============================================================"
+          - "This will remove:"
+          - "- All VMs with '{{ clustername }}' in their name"
+          - "- DNS/DHCP configuration"
+          - "- Cluster directory: {{ clusters_dir }}/{{ clustername }}"
+          - "============================================================"
 
   tasks:
     # -------------------------------------------------------------------------
@@ -99,12 +99,12 @@
   post_tasks:
     - name: Display completion message
       ansible.builtin.debug:
-        msg: |
-          ============================================================
-          Cluster '{{ clustername }}' has been destroyed
-          ============================================================
-          Removed {{ cluster_vms | length }} VMs
-          Network configuration cleaned up
-          Cluster directory removed
-          ============================================================
+        msg:
+          - "============================================================"
+          - "Cluster '{{ clustername }}' has been destroyed"
+          - "============================================================"
+          - "Removed {{ cluster_vms | length }} VMs"
+          - "Network configuration cleaned up"
+          - "Cluster directory removed"
+          - "============================================================"
 

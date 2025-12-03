@@ -17,14 +17,14 @@
   pre_tasks:
     - name: Display playbook information
       ansible.builtin.debug:
-        msg: |
-          ============================================================
-          OpenShift UPI KVM Deployment
-          ============================================================
-          Cluster: {{ clustername | default('undefined') }}
-          Domain:  {{ basedomain | default('undefined') }}
-          Type:    {{ 'SNO' if sno | default('false') == 'true' else '3-Node' }}
-          ============================================================
+        msg:
+          - "============================================================"
+          - "OpenShift UPI KVM Deployment"
+          - "============================================================"
+          - "Cluster: {{ clustername | default('undefined') }}"
+          - "Domain:  {{ basedomain | default('undefined') }}"
+          - "Type:    {{ 'SNO' if sno | default('false') == 'true' else '3-Node' }}"
+          - "============================================================"
 
   roles:
     - ocp_cluster
@@ -32,22 +32,22 @@
   post_tasks:
     - name: Display cluster access information
       ansible.builtin.debug:
-        msg: |
-          ============================================================
-          Cluster deployment completed successfully!
-          ============================================================
-          
-          To access the cluster:
-          
-          export KUBECONFIG="{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
-          oc get nodes
-          oc get clusterversion
-          
-          Console URL: https://console-openshift-console.apps.{{ clustername }}.{{ basedomain }}
-          API URL: https://api.{{ clustername }}.{{ basedomain }}:6443
-          
-          VM Management:
-          - Start: {{ clusters_dir }}/{{ clustername }}/startvms.sh
-          - Stop:  {{ clusters_dir }}/{{ clustername }}/stopvms.sh
-          ============================================================
+        msg:
+          - "============================================================"
+          - "Cluster deployment completed successfully!"
+          - "============================================================"
+          - ""
+          - "To access the cluster:"
+          - ""
+          - "export KUBECONFIG=\"{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig\""
+          - "oc get nodes"
+          - "oc get clusterversion"
+          - ""
+          - "Console URL: https://console-openshift-console.apps.{{ clustername }}.{{ basedomain }}"
+          - "API URL: https://api.{{ clustername }}.{{ basedomain }}:6443"
+          - ""
+          - "VM Management:"
+          - "- Start: {{ clusters_dir }}/{{ clustername }}/startvms.sh"
+          - "- Stop:  {{ clusters_dir }}/{{ clustername }}/stopvms.sh"
+          - "============================================================"
 

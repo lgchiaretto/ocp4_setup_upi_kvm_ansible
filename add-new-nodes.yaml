@@ -42,20 +42,18 @@
       ansible.builtin.assert:
         that:
           - n_worker | int > current_worker_count | int
-        fail_msg: |
-          n_worker ({{ n_worker }}) must be greater than current worker count ({{ current_worker_count }}).
-          To add workers, increase n_worker in your configuration.
+        fail_msg: "n_worker ({{ n_worker }}) must be greater than current worker count ({{ current_worker_count }}). To add workers, increase n_worker in your configuration."
 
     - name: Display worker addition plan
       ansible.builtin.debug:
-        msg: |
-          ============================================================
-          Adding Workers to Cluster '{{ clustername }}'
-          ============================================================
-          Current workers: {{ current_worker_count }}
-          Target workers:  {{ n_worker }}
-          New workers:     {{ n_worker | int - current_worker_count | int }}
-          ============================================================
+        msg:
+          - "============================================================"
+          - "Adding Workers to Cluster '{{ clustername }}'"
+          - "============================================================"
+          - "Current workers: {{ current_worker_count }}"
+          - "Target workers:  {{ n_worker }}"
+          - "New workers:     {{ n_worker | int - current_worker_count | int }}"
+          - "============================================================"
 
     # -------------------------------------------------------------------------
     # CSR Approver Setup
@@ -263,14 +261,14 @@
   post_tasks:
     - name: Display completion message
       ansible.builtin.debug:
-        msg: |
-          ============================================================
-          Worker nodes added successfully!
-          ============================================================
-          New workers: {{ n_worker | int - current_worker_count | int }}
-          Total workers: {{ n_worker }}
-          
-          Verify with: oc get nodes
-          ============================================================
+        msg:
+          - "============================================================"
+          - "Worker nodes added successfully!"
+          - "============================================================"
+          - "New workers: {{ n_worker | int - current_worker_count | int }}"
+          - "Total workers: {{ n_worker }}"
+          - ""
+          - "Verify with: oc get nodes"
+          - "============================================================"
 
 

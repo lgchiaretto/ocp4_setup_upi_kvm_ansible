@@ -105,11 +105,11 @@
 
 - name: Cleanup completed successfully
   ansible.builtin.debug:
-    msg: |
-      ============================================================
-      Cluster '{{ clustername }}' cleanup completed
-      ============================================================
-      - VMs removed: {{ cluster_vms | length }}
-      - Network files removed
-      - Cluster directory removed
-      ============================================================
+    msg:
+      - "============================================================"
+      - "Cluster '{{ clustername }}' cleanup completed"
+      - "============================================================"
+      - "- VMs removed: {{ cluster_vms | length }}"
+      - "- Network files removed"
+      - "- Cluster directory removed"
+      - "============================================================"

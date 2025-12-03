@@ -16,9 +16,7 @@
 
 - name: Fail if OCP version is not valid
   ansible.builtin.fail:
-    msg: |
-      Invalid OCP version: '{{ ocpversion }}'
-      Please verify the version exists at: {{ ocp_cluster_client_url }}
+    msg: "Invalid OCP version: '{{ ocpversion }}'. Please verify the version exists at: {{ ocp_cluster_client_url }}"
   when: ocp_version_check.status != 200
 
 # -----------------------------------------------------------------------------
@@ -26,27 +24,23 @@
 # -----------------------------------------------------------------------------
 - name: Fail if ODF is enabled on SNO cluster
   ansible.builtin.fail:
-    msg: |
-      Configuration error: ODF (installodf='true') is not supported on SNO clusters.
-      ODF requires a minimum of 3 nodes. Please set installodf='false' for SNO deployments.
+    msg: "Configuration error: ODF (installodf='true') is not supported on SNO clusters. ODF requires a minimum of 3 nodes. Please set installodf='false' for SNO deployments."
   when:
     - installodf | default('false') == 'true'
     - sno | default('false') == 'true'
 
 - name: Fail if OCP Virtualization is enabled without ODF
   ansible.builtin.fail:
-    msg: |
-      Configuration error: OCP Virtualization requires ODF for storage.
-      Please enable installodf='true' or disable installocpvirt='false'.
+    msg: "Configuration error: OCP Virtualization requires ODF for storage. Please enable installodf='true' or disable installocpvirt='false'."
   when:
     - installocpvirt | default('false') == 'true'
     - installodf | default('false') == 'false'
 
 - name: Warn about .local domain usage
   ansible.builtin.debug:
-    msg: |
-      WARNING: Using '.local' domain is not recommended due to mDNS conflicts.
-      Consider using a different domain like '.lab' or '.test' instead.
+    msg:
+      - "WARNING: Using '.local' domain is not recommended due to mDNS conflicts."
+      - "Consider using a different domain like '.lab' or '.test' instead."
   when: basedomain is defined and basedomain.endswith('.local')
 
 # -----------------------------------------------------------------------------
@@ -61,14 +55,7 @@
       - clusters_dir is defined
       - ssh_rsa is defined and ssh_rsa | length > 0
       - pullsecret is defined and pullsecret | length > 0
-    fail_msg: |
-      Missing required variables. Please ensure the following are defined:
-      - clustername: Name for the cluster
-      - basedomain: Base domain for DNS
-      - ocpversion: OpenShift version to install
-      - clusters_dir: Directory for cluster files
-      - ssh_rsa: SSH public key for node access
-      - pullsecret: Red Hat pull secret
+    fail_msg: "Missing required variables. Please ensure the following are defined: clustername, basedomain, ocpversion, clusters_dir, ssh_rsa, pullsecret"
 
 # -----------------------------------------------------------------------------
 # Validate Extra Disks Configuration
@@ -83,17 +70,17 @@
 
 - name: Display deployment configuration summary
   ansible.builtin.debug:
-    msg: |
-      ============================================================
-      Deployment Configuration Summary
-      ============================================================
-      Cluster Name:     {{ clustername }}
-      Base Domain:      {{ basedomain }}
-      OCP Version:      {{ ocpversion }}
-      Deployment Type:  {{ 'Single Node OpenShift (SNO)' if sno | default('false') == 'true' else '3-Node Cluster' }}
-      Workers:          {{ n_worker | default(0) }}
-      Extra Disks:      {{ extra_disks | default(0) }}
-      Install ODF:      {{ installodf | default('false') }}
-      Install OCP Virt: {{ installocpvirt | default('false') }}
-      Clusters Dir:     {{ clusters_dir }}
-      ============================================================
+    msg:
+      - "============================================================"
+      - "Deployment Configuration Summary"
+      - "============================================================"
+      - "Cluster Name:     {{ clustername }}"
+      - "Base Domain:      {{ basedomain }}"
+      - "OCP Version:      {{ ocpversion }}"
+      - "Deployment Type:  {{ 'Single Node OpenShift (SNO)' if sno | default('false') == 'true' else '3-Node Cluster' }}"
+      - "Workers:          {{ n_worker | default(0) }}"
+      - "Extra Disks:      {{ extra_disks | default(0) }}"
+      - "Install ODF:      {{ installodf | default('false') }}"
+      - "Install OCP Virt: {{ installocpvirt | default('false') }}"
+      - "Clusters Dir:     {{ clusters_dir }}"
+      - "============================================================"
