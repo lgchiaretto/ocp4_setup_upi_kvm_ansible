@@ -414,12 +414,3 @@ Run with verbose output for troubleshooting:
 ```bash
 ansible-playbook -vvv -e @ansible-vars-kvm.yaml create-cluster-upi-kvm-modular.yaml
 ```
-
-## 📜 License
-
-This project is licensed under the MIT License.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
