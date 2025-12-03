@@ -1,59 +1,100 @@
 ---
+# =============================================================================
 # System prerequisites setup
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Package Installation
+# -----------------------------------------------------------------------------
 - name: Ensure necessary packages are installed
   ansible.builtin.yum:
     name: "{{ ocp_cluster_required_packages }}"
     state: present
   become: true
 
-- name: Ensure libvirtd service is running
+# -----------------------------------------------------------------------------
+# Libvirt Service
+# -----------------------------------------------------------------------------
+- name: Ensure libvirtd service is running and enabled
   ansible.builtin.service:
     name: libvirtd
     state: started
     enabled: true
   become: true
 
-- name: Configuring networkmanager to use dnsmasq
+# -----------------------------------------------------------------------------
+# NetworkManager DNS Configuration
+# -----------------------------------------------------------------------------
+- name: Check current NetworkManager DNS configuration
+  ansible.builtin.stat:
+    path: "/etc/NetworkManager/conf.d/nm-dns.conf"
+  register: nm_dns_conf
+
+- name: Configure NetworkManager to use dnsmasq
   ansible.builtin.copy:
     dest: "/etc/NetworkManager/conf.d/nm-dns.conf"
     content: |
       [main]
       dns=dnsmasq
-  register: configdnsmasq
+    mode: '0644'
+  register: nm_dns_configured
   become: true
 
-- name: Stop systemd-resolved service
+# -----------------------------------------------------------------------------
+# systemd-resolved Handling
+# -----------------------------------------------------------------------------
+- name: Check if systemd-resolved is active
+  ansible.builtin.systemd:
+    name: systemd-resolved
+  register: systemd_resolved_status
+  ignore_errors: true
+  when: ansible_facts['distribution'] == 'Fedora'
+
+- name: Stop and disable systemd-resolved service
   ansible.builtin.systemd:
     name: systemd-resolved
     state: stopped
     enabled: false
   become: true
+  when:
+    - ansible_facts['distribution'] == 'Fedora'
+    - systemd_resolved_status is defined
+    - systemd_resolved_status.status is defined
+    - systemd_resolved_status.status.ActiveState == 'active'
+
+- name: Check if /etc/resolv.conf is a symlink
+  ansible.builtin.stat:
+    path: /etc/resolv.conf
+  register: resolv_conf_stat
   when: ansible_facts['distribution'] == 'Fedora'
 
-- name: Disable systemd-resolved from starting at boot
-  ansible.builtin.systemd:
-    name: systemd-resolved
-    enabled: false
-  become: true
-  when: ansible_facts['distribution'] == 'Fedora'
-
-- name: Remove /etc/resolv.conf
+- name: Remove symlinked /etc/resolv.conf for NetworkManager control
   ansible.builtin.file:
     path: /etc/resolv.conf
     state: absent
-  when: ansible_facts['distribution'] == 'Fedora'
+  when:
+    - ansible_facts['distribution'] == 'Fedora'
+    - resolv_conf_stat.stat.islnk | default(false)
   become: true
 
-- name: Restart Network Manager when configuring dnsmasq
+# -----------------------------------------------------------------------------
+# Restart Services
+# -----------------------------------------------------------------------------
+- name: Restart NetworkManager to apply DNS configuration
   ansible.builtin.service:
     name: NetworkManager
     state: restarted
   become: true
+  when: nm_dns_configured.changed
 
-- name: Sleeping 5 seconds to wait NetworkManager
+- name: Wait for NetworkManager to stabilize
   ansible.builtin.pause:
-    seconds: 5
+    seconds: "{{ ocp_cluster_nm_restart_delay }}"
+  when: nm_dns_configured.changed
 
+# -----------------------------------------------------------------------------
+# Python Dependencies
+# -----------------------------------------------------------------------------
 - name: Ensure Python packages are installed
   ansible.builtin.pip:
     name: "{{ ocp_cluster_python_packages }}"

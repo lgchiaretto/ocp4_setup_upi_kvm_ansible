@@ -1,6 +1,20 @@
 ---
-ocp_cluster_mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
+# =============================================================================
+# OpenShift UPI KVM Automation - Role Defaults
+# =============================================================================
+# This file contains default values for role variables.
+# Override these in ansible-vars-kvm.yaml or via command line.
+# =============================================================================
 
+# -----------------------------------------------------------------------------
+# Mirror URLs for downloading resources
+# -----------------------------------------------------------------------------
+ocp_cluster_mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
+ocp_cluster_client_url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/"
+
+# -----------------------------------------------------------------------------
+# System Dependencies
+# -----------------------------------------------------------------------------
 ocp_cluster_python_packages:
   - kubernetes
   - passlib
@@ -14,6 +28,27 @@ ocp_cluster_required_packages:
   - python3-pip
   - coreos-installer
 
+# -----------------------------------------------------------------------------
+# VM Configuration Defaults
+# -----------------------------------------------------------------------------
+ocp_cluster_master_disk_size: 120
+ocp_cluster_worker_disk_size: 120
+ocp_cluster_lb_disk_size: 10
+ocp_cluster_lb_memory: 1024
+ocp_cluster_lb_cpu: 4
+ocp_cluster_bootstrap_memory: 16000
+ocp_cluster_bootstrap_cpu: 8
+
+# -----------------------------------------------------------------------------
+# Network Configuration
+# -----------------------------------------------------------------------------
+ocp_cluster_wait_retries: 180
+ocp_cluster_wait_delay: 3
+ocp_cluster_nm_restart_delay: 5
+
+# -----------------------------------------------------------------------------
+# Operator Manifests - Local Storage and ODF
+# -----------------------------------------------------------------------------
 ocp_cluster_lso_manifests:
   - local-storage-namespace
   - odf-namespace
@@ -24,10 +59,16 @@ ocp_cluster_lso_operators:
   - odf-subscription
   - odf-operatorgroup
 
+# -----------------------------------------------------------------------------
+# Operator Manifests - OpenShift Virtualization
+# -----------------------------------------------------------------------------
 ocp_cluster_ocpvirt_operators:
   - ocpvirt-subscription
   - ocpvirt-operatorgroup
 
+# -----------------------------------------------------------------------------
+# CSR Approver Manifests (for worker node additions)
+# -----------------------------------------------------------------------------
 ocp_cluster_csr_approver_manifests:
   - csr-approver-ns
   - csr-approver-sa
@@ -35,3 +76,26 @@ ocp_cluster_csr_approver_manifests:
   - csr-approver-crb
   - csr-approver-rb
   - csr-approver-cronjob
+
+# -----------------------------------------------------------------------------
+# Timeouts and Retries
+# -----------------------------------------------------------------------------
+ocp_cluster_bootstrap_timeout: 3600
+ocp_cluster_install_timeout: 3600
+ocp_cluster_k8s_retries: 60
+ocp_cluster_k8s_delay: 10
+
+# -----------------------------------------------------------------------------
+# Supported Extra Disk Letters (vdb through vdk = 10 disks max)
+# -----------------------------------------------------------------------------
+ocp_cluster_extra_disk_letters:
+  - vdb
+  - vdc
+  - vdd
+  - vde
+  - vdf
+  - vdg
+  - vdh
+  - vdi
+  - vdj
+  - vdk

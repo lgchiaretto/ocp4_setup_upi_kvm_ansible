@@ -1,49 +1,61 @@
 ---
-# Download RHCOS images for non-SNO deployments
-- name: Check if the RHCOS file already exists on cache
-  ansible.builtin.stat:
-    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-qemu.x86_64.qcow2"
-  register: rhcosfile
+# =============================================================================
+# Download RHCOS images for 3-node cluster deployments
+# =============================================================================
+# These images are required for PXE booting and disk installation
+# on non-SNO (3-node) cluster deployments.
+# =============================================================================
 
-- name: Check if the initramfs file already exists on cache
+# -----------------------------------------------------------------------------
+# Check Cached Files
+# -----------------------------------------------------------------------------
+- name: Check if RHCOS qemu image exists in cache
   ansible.builtin.stat:
-    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/initramfs.img"
-  register: initramfsfile
+    path: "{{ ocp_cache_dir }}/rhcos-qemu.x86_64.qcow2"
+  register: rhcos_qemu_cached
 
-- name: Check if the rhcos-live-kernel-x86_64 file already exists on cache
+- name: Check if initramfs exists in cache
   ansible.builtin.stat:
-    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/vmlinuz"
-  register: kernelfile
+    path: "{{ ocp_cache_dir }}/initramfs.img"
+  register: initramfs_cached
 
-- name: Check if the rhcos-live-rootfs.x86_64.img file already exists on cache
+- name: Check if kernel exists in cache
   ansible.builtin.stat:
-    path: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-live-rootfs.x86_64.img"
-  register: rootfsfile
+    path: "{{ ocp_cache_dir }}/vmlinuz"
+  register: kernel_cached
 
-- name: Download RHCOS images
+- name: Check if rootfs exists in cache
+  ansible.builtin.stat:
+    path: "{{ ocp_cache_dir }}/rhcos-live-rootfs.x86_64.img"
+  register: rootfs_cached
+
+# -----------------------------------------------------------------------------
+# Download RHCOS Images
+# -----------------------------------------------------------------------------
+- name: Download RHCOS qemu image
   ansible.builtin.get_url:
     url: "{{ ocp_cluster_mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-qemu.x86_64.qcow2.gz"
-    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-qemu.x86_64.qcow2.gz"
+    dest: "{{ ocp_cache_dir }}/rhcos-qemu.x86_64.qcow2.gz"
     mode: "0644"
-  when: rhcosfile.stat is defined and not rhcosfile.stat.exists
+  when: not rhcos_qemu_cached.stat.exists
 
-- name: Download rootfs file
+- name: Download rootfs image
   ansible.builtin.get_url:
     url: "{{ ocp_cluster_mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-rootfs.x86_64.img"
-    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos-live-rootfs.x86_64.img"
+    dest: "{{ ocp_cache_dir }}/rhcos-live-rootfs.x86_64.img"
     mode: "0644"
-  when: rootfsfile.stat is defined and not rootfsfile.stat.exists
+  when: not rootfs_cached.stat.exists
 
-- name: Download initramfs images
+- name: Download initramfs image
   ansible.builtin.get_url:
     url: "{{ ocp_cluster_mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-initramfs.x86_64.img"
-    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/initramfs.img"
+    dest: "{{ ocp_cache_dir }}/initramfs.img"
     mode: "0644"
-  when: initramfsfile.stat is defined and not initramfsfile.stat.exists
+  when: not initramfs_cached.stat.exists
 
-- name: Download rhcos-live-kernel-x86_64 images
+- name: Download kernel image
   ansible.builtin.get_url:
     url: "{{ ocp_cluster_mirror_url }}{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-kernel.x86_64"
-    dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/vmlinuz"
+    dest: "{{ ocp_cache_dir }}/vmlinuz"
     mode: "0644"
-  when: kernelfile.stat is defined and not kernelfile.stat.exists
+  when: not kernel_cached.stat.exists

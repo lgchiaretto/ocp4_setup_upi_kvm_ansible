@@ -1,40 +1,115 @@
 ---
+# =============================================================================
 # Cleanup existing cluster resources
-- name: Get a list of all virtual machines
+# =============================================================================
+# This task removes all resources associated with a cluster:
+# - Virtual machines (destroy and undefine)
+# - DHCP reservations from libvirt network
+# - DNS/dnsmasq configuration files
+# - Cluster directory and all files
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Virtual Machine Cleanup
+# -----------------------------------------------------------------------------
+- name: Get list of all virtual machines
   ansible.builtin.command: virsh list --all --name
-  register: vms
-  changed_when: vms.rc == 0
+  register: vm_list
+  changed_when: false
   become: true
 
-- name: Filter VMs containing 'clustername' in their names
+- name: Filter VMs belonging to this cluster
   ansible.builtin.set_fact:
-    allvms: "{{ vms.stdout_lines | select('search', clustername) }}"
+    cluster_vms: "{{ vm_list.stdout_lines | select('search', clustername) | list }}"
 
-- name: Destroy all vms
+- name: Display VMs to be removed
+  ansible.builtin.debug:
+    msg: "VMs to be removed: {{ cluster_vms }}"
+  when: cluster_vms | length > 0
+
+- name: Destroy running cluster VMs
   community.libvirt.virt:
     command: destroy
     force: true
     name: "{{ item }}"
-  loop: "{{ allvms }}"
+  loop: "{{ cluster_vms }}"
   ignore_errors: true
   become: true
 
-- name: Undefine all vms
-  community.libvirt.virt:
-    command: undefine
-    force: true
-    name: "{{ item }}"
-  loop: "{{ allvms }}"
+- name: Undefine cluster VMs (remove storage)
+  ansible.builtin.command: "virsh undefine {{ item }} --remove-all-storage"
+  loop: "{{ cluster_vms }}"
   ignore_errors: true
   become: true
+  changed_when: true
 
-- name: Delete all network files
+# -----------------------------------------------------------------------------
+# Network DHCP Reservations Cleanup
+# -----------------------------------------------------------------------------
+- name: Get current DHCP hosts from libvirt network
+  ansible.builtin.shell: |
+    virsh net-dumpxml {{ kvmnetwork }} 2>/dev/null | grep -oP "mac='\K[^']*" || true
+  register: dhcp_macs
+  changed_when: false
+  become: true
+  ignore_errors: true
+
+- name: Get cluster MAC addresses from addnhosts file
+  ansible.builtin.shell: |
+    if [ -f "/etc/dnsmasq.{{ clustername }}.addnhosts" ]; then
+      cat "/etc/dnsmasq.{{ clustername }}.addnhosts" | awk '{print $1}'
+    fi
+  register: cluster_ips
+  changed_when: false
+  become: true
+  ignore_errors: true
+
+# -----------------------------------------------------------------------------
+# DNS and Network Configuration Cleanup
+# -----------------------------------------------------------------------------
+- name: Remove cluster network configuration files
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
-  register: deletefiles
-  with_items:
+  loop:
     - "/etc/NetworkManager/dnsmasq.d/{{ clustername }}.conf"
     - "/etc/dnsmasq.{{ clustername }}.addnhosts"
-    - "/{{ clusters_dir }}/{{ clustername }}/"
+  register: network_files_deleted
   become: true
+
+# -----------------------------------------------------------------------------
+# Cluster Directory Cleanup
+# -----------------------------------------------------------------------------
+- name: Remove cluster directory and all contents
+  ansible.builtin.file:
+    path: "{{ clusters_dir }}/{{ clustername }}/"
+    state: absent
+  become: true
+
+# -----------------------------------------------------------------------------
+# Service Restart
+# -----------------------------------------------------------------------------
+- name: Restart NetworkManager after cleanup
+  ansible.builtin.service:
+    name: NetworkManager
+    state: restarted
+  become: true
+  when: network_files_deleted.changed
+
+- name: Restart libvirtd after cleanup
+  ansible.builtin.service:
+    name: libvirtd
+    state: restarted
+  become: true
+  when: cluster_vms | length > 0
+
+- name: Cleanup completed successfully
+  ansible.builtin.debug:
+    msg: |
+      ============================================================
+      Cluster '{{ clustername }}' cleanup completed
+      ============================================================
+      - VMs removed: {{ cluster_vms | length }}
+      - Network files removed
+      - Cluster directory removed
+      ============================================================

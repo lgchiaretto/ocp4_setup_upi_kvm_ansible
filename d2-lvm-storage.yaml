@@ -1,34 +1,61 @@
+---
+# =============================================================================
+# Day 2: Install LVM Storage and Configure LVMCluster
+# =============================================================================
+# This playbook installs the LVM Storage Operator and configures an LVMCluster
+# for persistent storage using local disks.
+# =============================================================================
 - name: Install LVM Storage and Configure LVMCluster
   hosts: localhost
   gather_facts: false
   become_method: ansible.builtin.sudo
 
   vars:
-    extra_disks: "{{ extra_disks | int }}"
     lvmcluster_template: "templates/d2-storage-lvmcluster.yaml.j2"
     lvmcluster_file: "{{ clusters_dir }}/{{ clustername }}/d2-storage-lvmcluster.yaml"
     kubeconfig_path: "{{ clusters_dir }}/{{ clustername }}/auth/kubeconfig"
 
+  pre_tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - clustername is defined
+          - clusters_dir is defined
+          - extra_disks is defined
+        fail_msg: "Required variables must be defined"
+
   tasks:
-    - name: Get master-0 information
+    # -------------------------------------------------------------------------
+    # Validate Extra Disks
+    # -------------------------------------------------------------------------
+    - name: Get master-0 VM information
       community.libvirt.virt:
         command: get_xml
         name: "{{ clustername }}-master-0"
       register: vm_info
       become: true
 
-    - name: Parse the XML to count the number of disk devices
+    - name: Parse XML to count disk devices
       community.general.xml:
         xmlstring: "{{ vm_info.get_xml }}"
         xpath: "/domain/devices/disk[target/@dev]"
         content: text
       register: disk_devices
 
-    - name: Fail if extra_disks is 0
+    - name: Fail if no extra disks available
       ansible.builtin.fail:
-        msg: "There's no extra disk on master-0"
-      when: disk_devices.count == 2
+        msg: |
+          No extra disks found on master-0. LVM Storage requires at least one extra disk.
+          Please redeploy with extra_disks >= 1 in your configuration.
+      when: disk_devices.count <= 2
 
+    - name: Display disk configuration
+      ansible.builtin.debug:
+        msg: "Found {{ disk_devices.count - 2 }} extra disk(s) available for LVM Storage"
+
+    # -------------------------------------------------------------------------
+    # Namespace and OperatorGroup
+    # -------------------------------------------------------------------------
     - name: Ensure openshift-storage namespace exists
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
@@ -39,7 +66,7 @@
           metadata:
             name: openshift-storage
 
-    - name: Ensure OperatorGroup exists in openshift-storage namespace
+    - name: Ensure OperatorGroup exists
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
         state: present
@@ -53,7 +80,10 @@
             targetNamespaces:
               - openshift-storage
 
-    - name: Ensure LVMS Subscription exists
+    # -------------------------------------------------------------------------
+    # LVMS Operator Installation
+    # -------------------------------------------------------------------------
+    - name: Install LVMS Operator subscription
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
         state: present
@@ -76,41 +106,51 @@
         kind: ClusterServiceVersion
         namespace: openshift-storage
       register: lvm_csv_check
-      retries: 10
+      retries: 20
       delay: 30
-      until: "lvm_csv_check.resources | length > 0 and lvm_csv_check.resources[0].status.phase == 'Succeeded'"
+      until:
+        - lvm_csv_check.resources | length > 0
+        - lvm_csv_check.resources[0].status.phase == 'Succeeded'
 
     - name: Display LVM Storage installation status
       ansible.builtin.debug:
-        var: lvm_csv_check.resources[0].status.phase
+        msg: "LVM Storage Operator status: {{ lvm_csv_check.resources[0].status.phase }}"
 
-    - name: Generate the list of extra disks
+    # -------------------------------------------------------------------------
+    # LVMCluster Configuration
+    # -------------------------------------------------------------------------
+    - name: Generate extra disks list
       ansible.builtin.set_fact:
-        extra_disks_list: "{{ ['vdb', 'vdc', 'vdd', 'vde', 'vdf', 'vdg', 'vdh', 'vdi', 'vdj', 'vdk'][:extra_disks] }}"
+        extra_disks_list: "{{ ocp_cluster_extra_disk_letters[:extra_disks | int] | default(['vdb', 'vdc', 'vdd', 'vde', 'vdf', 'vdg', 'vdh', 'vdi', 'vdj', 'vdk'][:extra_disks | int]) }}"
 
-    - name: Display the generated list of extra disks
+    - name: Display configured disks
       ansible.builtin.debug:
-        var: extra_disks_list
+        msg: "Configuring LVMCluster with disks: {{ extra_disks_list }}"
 
-    - name: Apply the LVMCluster resource
+    - name: Apply LVMCluster resource
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
         state: present
         template: "{{ lvmcluster_template }}"
         namespace: openshift-storage
 
-    - name: Wait for LVMCluster to be in Ready status
+    - name: Wait for LVMCluster to be Ready
       kubernetes.core.k8s_info:
         kubeconfig: "{{ kubeconfig_path }}"
         api_version: lvm.topolvm.io/v1alpha1
         kind: LVMCluster
         namespace: openshift-storage
       register: lvmcluster_status
-      retries: 10
+      retries: 20
       delay: 30
-      until: "'Ready' in lvmcluster_status.resources[0].status.state"
+      until:
+        - lvmcluster_status.resources | length > 0
+        - lvmcluster_status.resources[0].status.state | default('') == 'Ready'
 
-    - name: Ensure PVC exists in default namespace
+    # -------------------------------------------------------------------------
+    # Validation Test
+    # -------------------------------------------------------------------------
+    - name: Create test PVC
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
         state: present
@@ -118,17 +158,17 @@
           apiVersion: v1
           kind: PersistentVolumeClaim
           metadata:
-            name: example-pvc-rwo
+            name: lvms-test-pvc
             namespace: default
           spec:
             accessModes:
               - ReadWriteOnce
             resources:
               requests:
-                storage: 5Gi
+                storage: 1Gi
             storageClassName: lvms-vg1
 
-    - name: Ensure Pod exists in default namespace
+    - name: Create test Pod
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
         state: present
@@ -136,45 +176,66 @@
           apiVersion: v1
           kind: Pod
           metadata:
-            name: busybox
+            name: lvms-test-pod
             namespace: default
           spec:
             containers:
-              - name: busybox
+              - name: test
                 image: busybox
-                command: ["/bin/sh", "-c", "while true ; do date; sleep 1; done;"]
+                command: ["/bin/sh", "-c", "echo 'LVM Storage test successful' && sleep 30"]
                 volumeMounts:
-                  - mountPath: /pvc
-                    name: pvc
+                  - mountPath: /data
+                    name: test-volume
             volumes:
-              - name: pvc
+              - name: test-volume
                 persistentVolumeClaim:
-                  claimName: example-pvc-rwo
+                  claimName: lvms-test-pvc
             restartPolicy: Never
 
-    - name: Wait for the pod to be running
+    - name: Wait for test Pod to complete
       kubernetes.core.k8s_info:
         kubeconfig: "{{ kubeconfig_path }}"
         kind: Pod
-        name: busybox
+        name: lvms-test-pod
         namespace: default
       register: pod_info
-      until: pod_info.resources[0].status.phase == 'Running'
+      until: pod_info.resources[0].status.phase in ['Succeeded', 'Running']
       retries: 30
       delay: 5
 
-    - name: Remove Pod in default namespace
+    - name: Clean up test resources
       kubernetes.core.k8s:
         kubeconfig: "{{ kubeconfig_path }}"
         state: absent
-        kind: Pod
-        name: busybox
+        kind: "{{ item.kind }}"
+        name: "{{ item.name }}"
         namespace: default
+      loop:
+        - { kind: Pod, name: lvms-test-pod }
+        - { kind: PersistentVolumeClaim, name: lvms-test-pvc }
 
-    - name: Remove PVC in default namespace
-      kubernetes.core.k8s:
-        kubeconfig: "{{ kubeconfig_path }}"
-        state: absent
-        kind: PersistentVolumeClaim
-        name: example-pvc-rwo
-        namespace: default
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg: |
+          ============================================================
+          LVM Storage configured successfully!
+          ============================================================
+          
+          StorageClass: lvms-vg1
+          Disks: {{ extra_disks_list | join(', ') }}
+          
+          To use LVM storage in your applications:
+          
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: my-pvc
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 10Gi
+            storageClassName: lvms-vg1
+          ============================================================

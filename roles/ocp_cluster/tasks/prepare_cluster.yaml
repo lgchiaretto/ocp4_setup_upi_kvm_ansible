@@ -1,5 +1,11 @@
 ---
+# =============================================================================
 # Prepare cluster directory and configuration files
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Directory Setup
+# -----------------------------------------------------------------------------
 - name: Create cluster directory
   ansible.builtin.file:
     path: "{{ clusters_dir }}/{{ clustername }}"
@@ -8,55 +14,70 @@
     owner: "{{ lookup('env', 'USER') }}"
   become: true
 
-- name: Create rhcos-install directory directory
+- name: Create rhcos-install directory (3-node only)
   ansible.builtin.file:
     path: "{{ clusters_dir }}/{{ clustername }}/rhcos-install"
     state: "directory"
     mode: "0755"
-  when: sno == "false"
+  when: sno | default('false') == 'false'
 
-- name: Copy openshift-install.tar.gz to cluster dir
+# -----------------------------------------------------------------------------
+# Copy Installer and RHCOS Images
+# -----------------------------------------------------------------------------
+- name: Copy OpenShift installer to cluster directory
   ansible.builtin.copy:
     remote_src: true
-    src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
+    src: "{{ ocp_cache_dir }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
     dest: "{{ clusters_dir }}/{{ clustername }}/"
     mode: '0644'
 
-- name: Untar on openshift-install-linux.tar.gz file
+- name: Extract OpenShift installer
   ansible.builtin.unarchive:
     remote_src: true
     src: "{{ clusters_dir }}/{{ clustername }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
     dest: "{{ clusters_dir }}/{{ clustername }}"
 
-- name: Copy rhcos.iso to cluster dir to master
+- name: Copy RHCOS ISO for master nodes (SNO)
   ansible.builtin.copy:
     remote_src: true
-    src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+    src: "{{ ocp_cache_dir }}/rhcos.iso"
     dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-master.iso"
     mode: '0644'
-  when: sno == "true"
+  when: sno | default('false') == 'true'
 
-- name: Copy rhcos.iso to cluster dir to worker
+- name: Copy RHCOS ISO for worker nodes
   ansible.builtin.copy:
     remote_src: true
-    src: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
+    src: "{{ ocp_cache_dir }}/rhcos.iso"
     dest: "{{ clusters_dir }}/{{ clustername }}/rhcos-worker.iso"
     mode: '0644'
 
-- name: Copy install-config.yaml
+# -----------------------------------------------------------------------------
+# Install Configuration
+# -----------------------------------------------------------------------------
+- name: Generate install-config.yaml
   ansible.builtin.template:
     src: install-config.yaml-upi.j2
     dest: "{{ clusters_dir }}/{{ clustername }}/install-config.yaml"
     mode: '0644'
 
-- name: Include RHCOS setup tasks for non-SNO
+# -----------------------------------------------------------------------------
+# RHCOS Files Setup (3-node only)
+# -----------------------------------------------------------------------------
+- name: Include RHCOS setup tasks for 3-node clusters
   ansible.builtin.include_tasks: prepare_rhcos_files.yaml
-  when: sno == "false"
+  when: sno | default('false') == 'false'
 
-- name: Include ignition generation tasks
+# -----------------------------------------------------------------------------
+# Ignition Configuration
+# -----------------------------------------------------------------------------
+- name: Generate ignition configurations
   ansible.builtin.include_tasks: generate_ignition.yaml
 
-- name: Copying cluster info files
+# -----------------------------------------------------------------------------
+# Cluster Information Files
+# -----------------------------------------------------------------------------
+- name: Create cluster information files
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ clusters_dir }}/{{ clustername }}/{{ item.dest }}"
@@ -65,13 +86,13 @@
     - { src: "clustername.json.j2", dest: "{{ clustername }}.json" }
     - { src: "create-tmuxp.yaml.j2", dest: "create-tmuxp.yaml" }
     - { src: "upgrade-tmuxp.yaml.j2", dest: "upgrade-tmuxp.yaml" }
-  register: copy_files
-  retries: 10
-  delay: 5
-  failed_when: copy_files is failed
-  until: copy_files is succeeded
+  retries: 3
+  delay: 2
 
-- name: Create VM management scripts
+# -----------------------------------------------------------------------------
+# VM Management Scripts
+# -----------------------------------------------------------------------------
+- name: Create VM management scripts (start/stop)
   ansible.builtin.template:
     src: "{{ item.src }}"
     dest: "{{ clusters_dir }}/{{ clustername }}/{{ item.dest }}"
@@ -79,20 +100,15 @@
   loop:
     - { src: "startvms.sh.j2", dest: "startvms.sh" }
     - { src: "stopvms.sh.j2", dest: "stopvms.sh" }
-  register: create_scripts
-  retries: 10
-  delay: 5
-  failed_when: create_scripts is failed
-  until: create_scripts is succeeded
+  retries: 3
+  delay: 2
 
-- name: Create started file on cluster directory
+# -----------------------------------------------------------------------------
+# Deployment Marker
+# -----------------------------------------------------------------------------
+- name: Create deployment started marker file
   ansible.builtin.file:
     path: "{{ clusters_dir }}/{{ clustername }}/started"
     state: touch
     mode: "0644"
   become: true
-  register: create_started_file
-  retries: 10
-  delay: 5
-  failed_when: create_started_file is failed
-  until: create_started_file is succeeded

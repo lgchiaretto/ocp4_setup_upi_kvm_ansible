@@ -1,42 +1,71 @@
 ---
+# =============================================================================
 # Main task file for OCP cluster setup
-- name: Validate OCP version and dependencies
+# =============================================================================
+# Deployment Flow:
+# 1. Validate    → Prerequisites → Cleanup (conditional)
+# 2. Download    → Prepare       → Create VMs
+# 3. Configure   → Workers       → Install
+# 4. Auth        → Storage       → Virtualization
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Phase 1: Validation and Prerequisites
+# -----------------------------------------------------------------------------
+- name: Validate OCP version and deployment configuration
   ansible.builtin.include_tasks: validate.yaml
 
-- name: Setup system prerequisites
+- name: Setup system prerequisites (packages, services)
   ansible.builtin.include_tasks: prerequisites.yaml
 
-- name: Cleanup existing cluster (if requested)
+- name: Cleanup existing cluster resources
   ansible.builtin.include_tasks: cleanup.yaml
-  when: destroy_if_exists == "true"
+  when: destroy_if_exists | default('false') == 'true'
 
-- name: Download and cache OCP resources
+# -----------------------------------------------------------------------------
+# Phase 2: Download and Prepare Resources
+# -----------------------------------------------------------------------------
+- name: Download and cache OCP resources (installer, RHCOS)
   ansible.builtin.include_tasks: download_resources.yaml
 
-- name: Prepare cluster directory and files
+- name: Prepare cluster directory, ignition configs, and scripts
   ansible.builtin.include_tasks: prepare_cluster.yaml
 
-- name: Create and configure VMs
+# -----------------------------------------------------------------------------
+# Phase 3: Create VMs and Configure Network
+# -----------------------------------------------------------------------------
+- name: Create and configure virtual machines (LB, masters)
   ansible.builtin.include_tasks: create_vms.yaml
 
-- name: Configure network and DNS
+- name: Configure network (DNS, DHCP reservations)
   ansible.builtin.include_tasks: configure_network.yaml
 
-- name: Create worker VMs (if needed)
+- name: Create and configure worker VMs
   ansible.builtin.include_tasks: create_workers.yaml
-  when: n_worker != 0
+  when: n_worker | default(0) | int > 0
 
-- name: Install and wait for cluster
+# -----------------------------------------------------------------------------
+# Phase 4: Install Cluster
+# -----------------------------------------------------------------------------
+- name: Install and wait for cluster completion
   ansible.builtin.include_tasks: install_cluster.yaml
 
-- name: Configure authentication
+# -----------------------------------------------------------------------------
+# Phase 5: Post-Installation Configuration (Day 2)
+# -----------------------------------------------------------------------------
+- name: Configure HTPasswd authentication
   ansible.builtin.include_tasks: configure_auth.yaml
-  when: admin_user != ""
+  when: admin_user | default('') | length > 0
 
-- name: Configure storage (ODF)
+- name: Configure OpenShift Data Foundation (ODF) storage
   ansible.builtin.include_tasks: configure_storage.yaml
-  when: installodf == "true" and sno == "false"
+  when:
+    - installodf | default('false') == 'true'
+    - sno | default('false') == 'false'
 
-- name: Configure virtualization (OCP Virt)
+- name: Configure OpenShift Virtualization
   ansible.builtin.include_tasks: configure_virtualization.yaml
-  when: installodf == "true" and installocpvirt == "true" and sno == "false"
+  when:
+    - installodf | default('false') == 'true'
+    - installocpvirt | default('false') == 'true'
+    - sno | default('false') == 'false'
