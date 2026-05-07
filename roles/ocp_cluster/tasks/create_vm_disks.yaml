@@ -12,7 +12,7 @@
       ansible.builtin.command: "qemu-img create -f qcow2 {{ clustername }}-extra-disk-{{ item }}.qcow2 {{ extra_disk_size }}G"
       args:
         chdir: "{{ clusters_dir }}/{{ clustername }}"
-      loop: "{{ range(1, extra_disks + 1) }}"
+      loop: "{{ range(1, extra_disks + 1) | list }}"
       when: extra_disks > 0
       register: extra_disks_result
       changed_when: true

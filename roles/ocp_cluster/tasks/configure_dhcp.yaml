@@ -29,18 +29,18 @@
     src: "haproxy.cfg-kvm.j2"
     dest: "/etc/haproxy/haproxy.cfg"
     mode: "0644"
-  delegate_to: "{{ lbvip.stdout_lines | first }}"
+  delegate_to: "{{ lbvip.stdout_lines | first | default(omit) }}"
   remote_user: "root"
-  when: sno == "false"
+  when: sno == "false" and lbvip is defined
 
 - name: Restart haproxy on LB
   ansible.builtin.systemd:
     name: haproxy
     state: restarted
     enabled: false
-  delegate_to: "{{ lbvip.stdout_lines | first }}"
+  delegate_to: "{{ lbvip.stdout_lines | first | default(omit) }}"
   remote_user: "root"
-  when: sno == "false"
+  when: sno == "false" and lbvip is defined
 
 - name: Waiting for RHCOS Installation to finish on bootstrap
   ansible.builtin.shell: "virsh list --name |  { grep -E '{{ clustername }}-master|{{ clustername }}-worker|{{ clustername }}-bootstrap' || true; }"

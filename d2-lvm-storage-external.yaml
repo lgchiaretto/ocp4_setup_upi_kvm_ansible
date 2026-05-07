@@ -1,0 +1,290 @@
+---
+# =============================================================================
+# Day 2: Install LVM Storage on an External OpenShift Cluster
+# =============================================================================
+# This playbook installs the LVM Storage Operator and configures an LVMCluster
+# for persistent storage using local disks on an existing OpenShift cluster
+# where the user is already logged in (uses current kubeconfig/oc session).
+#
+# Usage:
+#   ansible-playbook d2-lvm-storage-external.yaml
+#   ansible-playbook d2-lvm-storage-external.yaml -e "extra_disk_devices=['/dev/sdb','/dev/sdc']"
+#
+# Requirements:
+#   - Logged into the OpenShift cluster (oc login / KUBECONFIG set)
+#   - kubernetes.core Ansible collection installed
+#   - Node must have at least one extra unused disk
+# =============================================================================
+- name: Install LVM Storage on External OpenShift Cluster
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  vars:
+    # Default extra disk devices - override with -e if different
+    extra_disk_devices:
+      - /dev/sdb
+
+  tasks:
+    # -------------------------------------------------------------------------
+    # Validate Cluster Connectivity
+    # -------------------------------------------------------------------------
+    - name: Verify OpenShift cluster connectivity
+      kubernetes.core.k8s_info:
+        api_version: config.openshift.io/v1
+        kind: ClusterVersion
+      register: cluster_version
+
+    - name: Display cluster info
+      ansible.builtin.debug:
+        msg: "Connected to OpenShift {{ cluster_version.resources[0].status.desired.version }}"
+
+    - name: Get cluster nodes
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Node
+      register: cluster_nodes
+
+    - name: Display node count
+      ansible.builtin.debug:
+        msg: "Cluster has {{ cluster_nodes.resources | length }} node(s)"
+
+    # -------------------------------------------------------------------------
+    # Namespace and OperatorGroup
+    # -------------------------------------------------------------------------
+    - name: Ensure openshift-storage namespace exists
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: openshift-storage
+
+    - name: Ensure OperatorGroup exists
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: operators.coreos.com/v1
+          kind: OperatorGroup
+          metadata:
+            name: openshift-storage-operatorgroup
+            namespace: openshift-storage
+          spec:
+            targetNamespaces:
+              - openshift-storage
+
+    # -------------------------------------------------------------------------
+    # LVMS Operator Installation
+    # -------------------------------------------------------------------------
+    - name: Install LVMS Operator subscription
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: operators.coreos.com/v1alpha1
+          kind: Subscription
+          metadata:
+            name: lvms
+            namespace: openshift-storage
+          spec:
+            installPlanApproval: Automatic
+            name: lvms-operator
+            source: redhat-operators
+            sourceNamespace: openshift-marketplace
+
+    - name: Wait for LVM Storage operator to be installed
+      kubernetes.core.k8s_info:
+        api_version: operators.coreos.com/v1alpha1
+        kind: ClusterServiceVersion
+        namespace: openshift-storage
+      register: lvm_csv_check
+      retries: 30
+      delay: 30
+      until:
+        - lvm_csv_check.resources | length > 0
+        - lvm_csv_check.resources | selectattr('metadata.name', 'match', '.*lvms.*') | list | length > 0
+        - (lvm_csv_check.resources | selectattr('metadata.name', 'match', '.*lvms.*') | list)[0].status.phase | default('') == 'Succeeded'
+
+    - name: Display LVM Storage installation status
+      ansible.builtin.debug:
+        msg: "LVM Storage Operator installed: {{ (lvm_csv_check.resources | selectattr('metadata.name', 'match', '.*lvms.*') | list)[0].metadata.name }}"
+
+    # -------------------------------------------------------------------------
+    # LVMCluster Configuration
+    # -------------------------------------------------------------------------
+    - name: Display configured disks
+      ansible.builtin.debug:
+        msg: "Configuring LVMCluster with disks: {{ extra_disk_devices }}"
+
+    - name: Apply LVMCluster resource
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: lvm.topolvm.io/v1alpha1
+          kind: LVMCluster
+          metadata:
+            name: my-lvmcluster
+            namespace: openshift-storage
+          spec:
+            storage:
+              deviceClasses:
+                - name: vg1
+                  fstype: ext4
+                  default: true
+                  deviceSelector:
+                    paths: "{{ extra_disk_devices }}"
+                    forceWipeDevicesAndDestroyAllData: true
+                  thinPoolConfig:
+                    name: thin-pool-1
+                    sizePercent: 90
+                    overprovisionRatio: 10
+                    chunkSize: 128Ki
+                    chunkSizeCalculationPolicy: Static
+
+    - name: Wait for LVMCluster to be Ready
+      kubernetes.core.k8s_info:
+        api_version: lvm.topolvm.io/v1alpha1
+        kind: LVMCluster
+        namespace: openshift-storage
+      register: lvmcluster_status
+      retries: 30
+      delay: 30
+      until:
+        - lvmcluster_status.resources | length > 0
+        - lvmcluster_status.resources[0].status.state | default('') == 'Ready'
+
+    - name: Display LVMCluster status
+      ansible.builtin.debug:
+        msg: "LVMCluster state: {{ lvmcluster_status.resources[0].status.state }}"
+
+    # -------------------------------------------------------------------------
+    # Set as Default StorageClass
+    # -------------------------------------------------------------------------
+    - name: Check existing StorageClasses
+      kubernetes.core.k8s_info:
+        api_version: storage.k8s.io/v1
+        kind: StorageClass
+      register: existing_sc
+
+    - name: Remove default annotation from other StorageClasses
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: storage.k8s.io/v1
+          kind: StorageClass
+          metadata:
+            name: "{{ item.metadata.name }}"
+            annotations:
+              storageclass.kubernetes.io/is-default-class: "false"
+          provisioner: "{{ item.provisioner }}"
+          reclaimPolicy: "{{ item.reclaimPolicy }}"
+      loop: "{{ existing_sc.resources }}"
+      when:
+        - item.metadata.annotations is defined
+        - item.metadata.annotations['storageclass.kubernetes.io/is-default-class'] | default('false') == 'true'
+        - item.metadata.name != 'lvms-vg1'
+
+    - name: Set lvms-vg1 as default StorageClass
+      kubernetes.core.k8s:
+        state: patched
+        api_version: storage.k8s.io/v1
+        kind: StorageClass
+        name: lvms-vg1
+        definition:
+          metadata:
+            annotations:
+              storageclass.kubernetes.io/is-default-class: "true"
+
+    # -------------------------------------------------------------------------
+    # Validation Test
+    # -------------------------------------------------------------------------
+    - name: Create test PVC
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: PersistentVolumeClaim
+          metadata:
+            name: lvms-test-pvc
+            namespace: default
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 1Gi
+            storageClassName: lvms-vg1
+
+    - name: Create test Pod
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Pod
+          metadata:
+            name: lvms-test-pod
+            namespace: default
+          spec:
+            containers:
+              - name: test
+                image: busybox
+                command: ["/bin/sh", "-c", "echo 'LVM Storage test successful' && sleep 30"]
+                volumeMounts:
+                  - mountPath: /data
+                    name: test-volume
+            volumes:
+              - name: test-volume
+                persistentVolumeClaim:
+                  claimName: lvms-test-pvc
+            restartPolicy: Never
+
+    - name: Wait for test Pod to complete
+      kubernetes.core.k8s_info:
+        kind: Pod
+        name: lvms-test-pod
+        namespace: default
+      register: pod_info
+      until: pod_info.resources[0].status.phase in ['Succeeded', 'Running']
+      retries: 30
+      delay: 5
+
+    - name: Display test result
+      ansible.builtin.debug:
+        msg: "Validation test Pod phase: {{ pod_info.resources[0].status.phase }}"
+
+    - name: Clean up test resources
+      kubernetes.core.k8s:
+        state: absent
+        kind: "{{ item.kind }}"
+        name: "{{ item.name }}"
+        namespace: default
+      loop:
+        - { kind: Pod, name: lvms-test-pod }
+        - { kind: PersistentVolumeClaim, name: lvms-test-pvc }
+
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "============================================================"
+          - "LVM Storage configured successfully!"
+          - "============================================================"
+          - ""
+          - "Cluster: OpenShift {{ cluster_version.resources[0].status.desired.version }}"
+          - "StorageClass: lvms-vg1 (default)"
+          - "Disks: {{ extra_disk_devices | join(', ') }}"
+          - ""
+          - "To use LVM storage in your applications:"
+          - ""
+          - "apiVersion: v1"
+          - "kind: PersistentVolumeClaim"
+          - "metadata:"
+          - "  name: my-pvc"
+          - "spec:"
+          - "  accessModes:"
+          - "    - ReadWriteOnce"
+          - "  resources:"
+          - "    requests:"
+          - "      storage: 10Gi"
+          - "  storageClassName: lvms-vg1"
+          - "============================================================"
