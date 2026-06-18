@@ -29,7 +29,7 @@
     src: "haproxy.cfg-kvm.j2"
     dest: "/etc/haproxy/haproxy.cfg"
     mode: "0644"
-  delegate_to: "{{ lbvip.stdout_lines | first }}"
+  delegate_to: "{{ lbvip.stdout_lines | first if lbvip is defined else inventory_hostname }}"
   remote_user: "root"
   when: sno == "false"
 
@@ -38,7 +38,7 @@
     name: haproxy
     state: restarted
     enabled: false
-  delegate_to: "{{ lbvip.stdout_lines | first }}"
+  delegate_to: "{{ lbvip.stdout_lines | first if lbvip is defined else inventory_hostname }}"
   remote_user: "root"
   when: sno == "false"
 

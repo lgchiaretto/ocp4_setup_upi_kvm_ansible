@@ -1,5 +1,11 @@
 ---
 # Install cluster and wait for completion
+- name: Stop NetBird VPN to restore local DNS in resolv.conf
+  ansible.builtin.command: netbird down
+  become: true
+  changed_when: true
+  ignore_errors: true
+
 - name: Run wait-for bootstrap-complete
   ansible.builtin.command: "./openshift-install wait-for bootstrap-complete"
   args:
@@ -122,6 +128,12 @@
       spec:
         suspend: true
   when: n_worker != 0
+
+- name: Restart NetBird VPN after cluster installation
+  ansible.builtin.command: netbird up
+  become: true
+  changed_when: true
+  ignore_errors: true
 
 - name: Change owner and group on clusters_dir
   ansible.builtin.file:
