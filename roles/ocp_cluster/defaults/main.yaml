@@ -1,5 +1,11 @@
 ---
-ocp_cluster_mirror_url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/"
+ocp_major_version: "{{ ocpversion.split('.')[0] }}"
+
+# RHCOS path inside the mirror: v4 uses "{minor}/latest", v5+ uses just "latest"
+# because the v5 mirror has no 5.x RHCOS directories (RHCOS still uses 4.x versioning)
+ocp_rhcos_path: "{{ 'latest' if (ocp_major_version | int) >= 5 else (ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1')) + '/latest' }}"
+
+ocp_cluster_mirror_url: "https://mirror.openshift.com/pub/openshift-v{{ ocp_major_version }}/x86_64/dependencies/rhcos/"
 
 ocp_cluster_python_packages:
   - kubernetes

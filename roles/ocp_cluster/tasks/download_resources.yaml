@@ -15,7 +15,7 @@
 
 - name: Download installer openshift-install-linux.tar.gz to cache
   ansible.builtin.get_url:
-    url: "https://mirror.openshift.com/pub/openshift-v4/clients/ocp/{{ ocpversion }}/openshift-install-linux.tar.gz"
+    url: "https://mirror.openshift.com/pub/openshift-v{{ ocp_major_version }}/clients/ocp/{{ ocpversion }}/openshift-install-linux.tar.gz"
     dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/openshift-install-linux-{{ ocpversion }}.tar.gz"
     mode: '0644'
     owner: "{{ lookup('env', 'USER') }}"
@@ -29,7 +29,7 @@
 
 - name: Download rhcos iso to cache when ocp < 4.19
   ansible.builtin.get_url:
-    url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live.x86_64.iso"
+    url: "https://mirror.openshift.com/pub/openshift-v{{ ocp_major_version }}/x86_64/dependencies/rhcos/{{ ocp_rhcos_path }}/rhcos-live.x86_64.iso"
     dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
     mode: '0644'
     owner: "{{ lookup('env', 'USER') }}"
@@ -41,7 +41,7 @@
 
 - name: Download rhcos iso to cache when ocp >= 4.19
   ansible.builtin.get_url:
-    url: "https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/latest/rhcos-live-iso.x86_64.iso"
+    url: "https://mirror.openshift.com/pub/openshift-v{{ ocp_major_version }}/x86_64/dependencies/rhcos/{{ ocp_rhcos_path }}/rhcos-live-iso.x86_64.iso"
     dest: "{{ clusters_dir }}/.cache/{{ ocpversion | regex_replace('(\\d+\\.\\d+).*', '\\1') }}/rhcos.iso"
     mode: '0644'
     owner: "{{ lookup('env', 'USER') }}"
